@@ -15,7 +15,11 @@
           <el-icon><CircleClose /></el-icon>
           <span>取消静默</span>
         </el-dropdown-item>
-        <el-dropdown-item divided command="15">
+        <el-dropdown-item divided command="5">
+          <el-icon><Clock /></el-icon>
+          <span>静默 5 分钟</span>
+        </el-dropdown-item>
+        <el-dropdown-item command="15">
           <el-icon><Clock /></el-icon>
           <span>静默 15 分钟</span>
         </el-dropdown-item>
@@ -31,9 +35,9 @@
           <el-icon><Clock /></el-icon>
           <span>静默 2 小时</span>
         </el-dropdown-item>
-        <el-dropdown-item command="240">
+        <el-dropdown-item command="300">
           <el-icon><Clock /></el-icon>
-          <span>静默 4 小时</span>
+          <span>静默 5 小时</span>
         </el-dropdown-item>
         <el-dropdown-item command="480">
           <el-icon><Clock /></el-icon>

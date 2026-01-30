@@ -53,7 +53,28 @@
 
     <div class="task-list-footer">
       <span class="task-count">共 {{ store.tasks.length }} 个任务</span>
-      <MuteButton v-if="kioskMode" size="small" />
+      <div class="footer-actions">
+        <MuteButton v-if="kioskMode" size="small" />
+        <el-button
+          v-if="!kioskMode"
+          size="small"
+          @click="enterKioskMode"
+          title="进入Kiosk模式"
+          class="kiosk-button"
+        >
+          <el-icon><FullScreen /></el-icon>
+        </el-button>
+        <el-button
+          v-else
+          size="small"
+          type="primary"
+          @click="exitKioskMode"
+          title="退出Kiosk模式"
+          class="kiosk-button kiosk-active"
+        >
+          <el-icon><FullScreen /></el-icon>
+        </el-button>
+      </div>
     </div>
 
     <!-- Context Menu -->
@@ -82,7 +103,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useTaskStore } from '../stores/taskStore'
 import { useWsStore } from '../stores/wsStore'
 import { useServiceStore } from '../stores/serviceStore'
-import { Search, Refresh } from '@element-plus/icons-vue'
+import { Search, Refresh, FullScreen, Close } from '@element-plus/icons-vue'
 import MuteButton from './MuteButton.vue'
 
 // Props
@@ -143,6 +164,24 @@ function selectTask(taskName) {
 
 function refreshTasks() {
   store.fetchTasks()
+}
+
+function enterKioskMode() {
+  // Add kiosk=1 query parameter
+  router.push({
+    path: route.path,
+    query: { ...route.query, kiosk: '1' }
+  })
+}
+
+function exitKioskMode() {
+  // Remove kiosk query parameter
+  const query = { ...route.query }
+  delete query.kiosk
+  router.push({
+    path: route.path,
+    query
+  })
 }
 
 function showContextMenu(event, task) {
@@ -338,6 +377,21 @@ onUnmounted(() => {
 
 .task-count {
   flex: 1;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kiosk-button {
+  padding: 4px 8px;
+}
+
+.kiosk-button.kiosk-active {
+  background-color: var(--el-color-primary);
+  color: white;
 }
 
 /* Context Menu */
