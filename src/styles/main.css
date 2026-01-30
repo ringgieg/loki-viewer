@@ -1,4 +1,4 @@
-/* Global Styles - Flat Design */
+/* Global Styles - Modern Flat Design */
 * {
   margin: 0;
   padding: 0;
@@ -7,10 +7,10 @@
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
-  color: #333;
-  background: #fff;
+  color: #111827;
+  background: #ffffff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -21,52 +21,80 @@ html, body {
 
 /* Scrollbar Styles */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f0f0f0;
+  background: #f3f4f6;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ccc;
+  background: #d1d5db;
+  border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aaa;
+  background: #9ca3af;
 }
 
 /* Selection */
 ::selection {
-  background: #0066cc;
-  color: #fff;
+  background: #3b82f6;
+  color: #ffffff;
 }
 
-/* Element Plus Overrides - Flat */
+/* Element Plus Overrides - Modern Flat */
 .el-button {
-  border-radius: 2px !important;
-  box-shadow: none !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.15s ease !important;
 }
 
 .el-input__wrapper {
-  border-radius: 2px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
   box-shadow: none !important;
-  border: 1px solid #ddd !important;
+  transition: all 0.15s ease !important;
+}
+
+.el-input__wrapper:hover {
+  border-color: #d1d5db !important;
+}
+
+.el-input__wrapper.is-focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
 }
 
 .el-select__wrapper {
-  border-radius: 2px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
   box-shadow: none !important;
 }
 
 .el-tag {
-  border-radius: 2px !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
 }
 
 .el-badge__content {
-  border-radius: 2px !important;
-  box-shadow: none !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+}
+
+.el-dropdown-menu {
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.el-dropdown-menu__item {
+  border-radius: 6px !important;
+  margin: 2px 4px !important;
+  transition: all 0.15s ease !important;
 }
 
 /* Animation */

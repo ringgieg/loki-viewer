@@ -13,17 +13,60 @@
       :key="item.log.id"
       :ref="el => setItemRef(el, item.index)"
       class="log-entry"
-      :class="'level-' + (item.log.level || 'info').toLowerCase()"
+      :class="[
+        'level-' + (item.log.level || 'info').toLowerCase(),
+        { 'is-expanded': isExpanded(item.log.id) }
+      ]"
       :data-index="item.index"
+      @click="toggleExpand(item.log.id)"
     >
-      <div class="log-meta">
-        <span class="log-time">{{ formatTime(item.log.timestamp) }}</span>
-        <span class="log-level" :class="'level-' + (item.log.level || 'info').toLowerCase()">
-          {{ item.log.level || 'INFO' }}
+      <div class="log-header">
+        <div class="log-meta">
+          <span class="log-time">{{ formatTime(item.log.timestamp) }}</span>
+          <span class="log-level" :class="'level-' + (item.log.level || 'info').toLowerCase()">
+            {{ item.log.level || 'INFO' }}
+          </span>
+          <span v-if="item.log.isNew" class="new-tag">NEW</span>
+        </div>
+        <span class="expand-icon">
+          <el-icon v-if="isExpanded(item.log.id)"><ArrowDown /></el-icon>
+          <el-icon v-else><ArrowRight /></el-icon>
         </span>
-        <span v-if="item.log.isNew" class="new-tag">NEW</span>
       </div>
       <div class="log-content" v-html="escapeHtml(item.log.line)"></div>
+
+      <!-- Expanded details section -->
+      <div v-if="isExpanded(item.log.id)" class="log-details">
+        <!-- Raw log with copy button -->
+        <div class="detail-section">
+          <div class="section-header">
+            <span class="section-title">原始日志</span>
+            <el-button size="small" @click.stop="copyRawLog(item.log.line)">
+              <el-icon><DocumentCopy /></el-icon>
+              复制
+            </el-button>
+          </div>
+          <div class="raw-log-content" @click.stop>{{ item.log.line }}</div>
+        </div>
+
+        <!-- Labels -->
+        <div class="detail-section">
+          <div class="section-header">
+            <span class="section-title">标签</span>
+          </div>
+          <div class="labels-grid">
+            <div
+              v-for="(value, key) in item.log.labels"
+              :key="key"
+              class="label-item"
+              @click.stop="copyLabel(key, value)"
+            >
+              <span class="label-key">{{ key }}</span>
+              <span class="label-value">{{ value }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom spacer -->
@@ -43,6 +86,8 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
+import { ArrowDown, ArrowRight, DocumentCopy } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 
 const props = defineProps({
@@ -59,6 +104,7 @@ const containerRef = ref(null)
 const itemHeights = ref({})
 const scrollTop = ref(0)
 const containerHeight = ref(0)
+const expandedLogs = ref(new Set())
 
 const BUFFER = props.bufferSize
 
@@ -131,7 +177,9 @@ function handleScroll(event) {
   scrollTop.value = target.scrollTop
 
   const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight
-  if (scrollBottom < 200 && !props.loading && props.hasMore) {
+  // Use dynamic threshold based on container height (default 20%)
+  const threshold = containerHeight.value * 0.2
+  if (scrollBottom < threshold && !props.loading && props.hasMore) {
     emit('load-more')
   }
 }
@@ -145,6 +193,57 @@ function escapeHtml(text) {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+function isExpanded(logId) {
+  return expandedLogs.value.has(logId)
+}
+
+function toggleExpand(logId) {
+  // Don't toggle if user is selecting text
+  const selection = window.getSelection()
+  if (selection && selection.toString().length > 0) {
+    return
+  }
+
+  if (expandedLogs.value.has(logId)) {
+    expandedLogs.value.delete(logId)
+  } else {
+    expandedLogs.value.add(logId)
+  }
+  // Trigger re-measurement of item heights
+  nextTick(() => {
+    updateContainerHeight()
+  })
+}
+
+async function copyLabel(key, value) {
+  const text = `${key}="${value}"`
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success({
+      message: '已复制到剪贴板',
+      duration: 2000,
+      showClose: false
+    })
+  } catch (e) {
+    console.error('Failed to copy:', e)
+    ElMessage.error('复制失败')
+  }
+}
+
+async function copyRawLog(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success({
+      message: '已复制原始日志',
+      duration: 2000,
+      showClose: false
+    })
+  } catch (e) {
+    console.error('Failed to copy:', e)
+    ElMessage.error('复制失败')
+  }
 }
 
 function updateContainerHeight() {
@@ -182,86 +281,234 @@ onUnmounted(() => {
 .virtual-log-list {
   height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: #f9fafb;
+  padding: 12px;
 }
 
 .log-entry {
-  padding: 8px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  border-left: 3px solid #1890ff;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: #ffffff;
+  border-radius: 8px;
+  border-left: 3px solid #3b82f6;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.log-entry:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.log-entry.is-expanded {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-left-width: 4px;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .log-entry.level-error {
-  border-left-color: #ff4d4f;
-  background: #fff2f0;
+  border-left-color: #ef4444;
+  background: #fef2f2;
 }
 
 .log-entry.level-warn {
-  border-left-color: #faad14;
-  background: #fffbe6;
+  border-left-color: #f59e0b;
+  background: #fffbeb;
 }
 
 .log-entry.level-debug {
-  border-left-color: #999;
+  border-left-color: #9ca3af;
 }
 
 .log-meta {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 4px;
+  flex: 1;
+}
+
+.expand-icon {
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  font-size: 16px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 4px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.log-entry:hover .expand-icon {
+  color: #3b82f6;
+  background: #eff6ff;
 }
 
 .log-time {
   font-size: 12px;
-  color: #999;
-  font-family: Consolas, Monaco, monospace;
+  color: #6b7280;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+  font-weight: 500;
 }
 
 .log-level {
   font-size: 11px;
-  font-weight: 600;
-  padding: 1px 4px;
-  background: #e6f7ff;
-  color: #1890ff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #dbeafe;
+  color: #1e40af;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .log-level.level-error {
-  background: #fff2f0;
-  color: #ff4d4f;
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .log-level.level-warn {
-  background: #fffbe6;
-  color: #faad14;
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .log-level.level-debug {
-  background: #f5f5f5;
-  color: #999;
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .new-tag {
   font-size: 10px;
-  padding: 1px 4px;
-  background: #52c41a;
-  color: #fff;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #10b981;
+  color: #ffffff;
+  text-transform: uppercase;
 }
 
 .log-content {
   font-size: 13px;
-  line-height: 1.5;
-  color: #333;
-  font-family: Consolas, Monaco, monospace;
+  line-height: 1.6;
+  color: #111827;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  user-select: text;
+  cursor: text;
+  padding-left: 4px;
 }
 
 .loading-more,
 .no-more {
-  padding: 16px;
+  padding: 20px;
   text-align: center;
-  color: #999;
-  font-size: 13px;
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Expanded Details Section */
+.log-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  user-select: none;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.raw-log-content {
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+  line-height: 1.5;
+  color: #111827;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  cursor: text;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.labels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+}
+
+.label-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.label-item:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.label-key {
+  color: #6b7280;
+  font-weight: 600;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.label-key::after {
+  content: '=';
+  margin-left: 4px;
+  color: #9ca3af;
+}
+
+.label-value {
+  color: #111827;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
 </style>

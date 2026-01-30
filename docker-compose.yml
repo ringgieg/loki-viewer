@@ -9,9 +9,6 @@ services:
     container_name: loki-viewer
     ports:
       - "8080:80"
-    environment:
-      # Nginx will proxy to this Loki instance
-      - LOKI_URL=http://loki:3100
     networks:
       - loki-network
     depends_on:

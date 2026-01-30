@@ -38,6 +38,7 @@ onMounted(async () => {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  background: #f9fafb;
 }
 
 .app-main {
@@ -47,7 +48,7 @@ onMounted(async () => {
 }
 
 .app-sidebar {
-  width: 300px;
+  width: 320px;
   flex-shrink: 0;
   overflow: hidden;
 }

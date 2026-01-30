@@ -260,9 +260,35 @@ location /loki/ {
 1. 推送到 `main` 或 `develop` 分支
 2. GitHub Actions 自动构建 Docker 镜像
 3. 镜像推送到 GitHub Container Registry
-4. 支持多平台（amd64, arm64）
+4. 支持平台：linux/amd64
 
 查看工作流配置：[.github/workflows/docker-build.yml](.github/workflows/docker-build.yml)
+
+### Docker 镜像内置工具
+
+Docker 镜像除了提供 Web 服务外，还包含了以下工具用于运维和调试：
+
+**Python 环境**:
+- Python 3 + pip
+- requests 库
+
+**网络工具**:
+- curl, wget
+- traceroute, ping, nslookup
+
+**实用工具**:
+- vim (文本编辑器)
+- jq (JSON 处理)
+
+验证工具安装：
+```bash
+docker exec loki-viewer sh /test-tools.sh
+```
+
+运行 Python 查询示例：
+```bash
+docker exec loki-viewer python3 /examples/query-loki.py
+```
 
 ## 注意事项
 

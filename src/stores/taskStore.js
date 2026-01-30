@@ -8,8 +8,9 @@ export const useTaskStore = defineStore('task', () => {
   // State
   const tasks = ref([])
   const watchedTasks = ref(new Set())
-  const errorCounts = ref({})
   const loading = ref(false)
+  // Unread alerts count per task: Map<taskName, count>
+  const unreadAlerts = ref(new Map())
 
   // Load watched tasks from localStorage
   function loadWatchedTasks() {
@@ -71,6 +72,22 @@ export const useTaskStore = defineStore('task', () => {
     saveWatchedTasks()
   }
 
+  // Increment unread alert count for a task
+  function incrementUnreadAlerts(taskName) {
+    const current = unreadAlerts.value.get(taskName) || 0
+    unreadAlerts.value.set(taskName, current + 1)
+  }
+
+  // Clear unread alerts for a task
+  function clearUnreadAlerts(taskName) {
+    unreadAlerts.value.delete(taskName)
+  }
+
+  // Get unread alert count for a task
+  function getUnreadAlertCount(taskName) {
+    return unreadAlerts.value.get(taskName) || 0
+  }
+
   // Computed: sorted tasks (watched first, then alphabetically)
   const sortedTasks = computed(() => {
     return [...tasks.value].sort((a, b) => {
@@ -83,31 +100,22 @@ export const useTaskStore = defineStore('task', () => {
     })
   })
 
-  // Computed: total unread error count for watched tasks
-  const totalWatchedErrors = computed(() => {
-    let total = 0
-    for (const task of tasks.value) {
-      if (task.watched) {
-        total += errorCounts.value[task.name] || 0
-      }
-    }
-    return total
-  })
-
   return {
     // State
     tasks,
     watchedTasks,
-    errorCounts,
     loading,
+    unreadAlerts,
 
     // Computed
     sortedTasks,
-    totalWatchedErrors,
 
     // Actions
     initialize,
     fetchTasks,
-    toggleWatched
+    toggleWatched,
+    incrementUnreadAlerts,
+    clearUnreadAlerts,
+    getUnreadAlertCount
   }
 })

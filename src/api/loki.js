@@ -1,6 +1,9 @@
 import axios from 'axios'
 
-const LOKI_WS_URL = `ws://${window.location.hostname}:3100`
+// Use nginx proxy for WebSocket connections
+// Automatically uses wss:// for HTTPS and ws:// for HTTP
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const LOKI_WS_URL = `${protocol}//${window.location.host}`
 
 // Request queue to limit concurrent requests
 let pendingRequest = null
@@ -141,9 +144,8 @@ export function tailLogs(query, callbacks = {}) {
     // Cleanup any existing connection first
     cleanupWebSocket()
 
-    isConnecting = true
-
     try {
+      isConnecting = true
       console.log('[WebSocket] Connecting to:', wsUrl)
       ws = new WebSocket(wsUrl)
 
@@ -211,7 +213,7 @@ function parseStreamData(streams) {
     const labels = stream.stream || {}
     for (const [timestamp, line] of (stream.values || [])) {
       logs.push({
-        id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `${timestamp}-${Math.random().toString(36).substring(2, 11)}`,
         timestamp: parseInt(timestamp, 10) / 1000000,
         timestampNano: parseInt(timestamp, 10),
         line,
@@ -268,11 +270,6 @@ export async function queryTaskLogs(taskName, options = {}) {
   return queryLogsWithCursor(query, options)
 }
 
-export function tailTaskLogs(taskName, callbacks, options = {}) {
-  const query = buildTaskQuery(taskName, options)
-  return tailLogs(query, callbacks)
-}
-
 function parseLogResponse(data, direction = 'backward') {
   const logs = []
 
@@ -281,7 +278,7 @@ function parseLogResponse(data, direction = 'backward') {
       const labels = stream.stream || {}
       for (const [timestamp, line] of (stream.values || [])) {
         logs.push({
-          id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `${timestamp}-${Math.random().toString(36).substring(2, 11)}`,
           timestamp: parseInt(timestamp, 10) / 1000000,
           timestampNano: parseInt(timestamp, 10),
           line,
@@ -306,4 +303,27 @@ function parseLogResponse(data, direction = 'backward') {
 function extractLevel(line) {
   const match = line.match(/\]\s+(ERROR|WARN|INFO|DEBUG|TRACE)\s+/)
   return match ? match[1] : 'INFO'
+}
+
+/**
+ * Filter logs by level (threshold-based)
+ * Selected level acts as threshold: INFO shows ERROR, WARN, INFO
+ * @param {Array} logs - Logs to filter
+ * @param {string} level - Selected level (ERROR, WARN, INFO, DEBUG, or empty for all)
+ * @returns {Array} Filtered logs
+ */
+export function filterLogsByLevel(logs, level) {
+  if (!level) return logs
+
+  const levelOrder = ['ERROR', 'WARN', 'INFO', 'DEBUG']
+  const selectedIndex = levelOrder.indexOf(level)
+
+  if (selectedIndex === -1) return logs
+
+  const allowedLevels = levelOrder.slice(0, selectedIndex + 1)
+
+  return logs.filter(log => {
+    const logLevel = (log.level || 'INFO').toUpperCase()
+    return allowedLevels.includes(logLevel)
+  })
 }

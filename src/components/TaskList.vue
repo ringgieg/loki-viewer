@@ -9,6 +9,13 @@
         clearable
         class="search-input"
       />
+      <el-button
+        size="small"
+        :icon="Refresh"
+        :loading="store.loading"
+        @click="refreshTasks"
+        class="refresh-button"
+      />
     </div>
 
     <div class="task-list-content" v-loading="store.loading">
@@ -24,17 +31,16 @@
         @contextmenu.prevent="showContextMenu($event, task)"
       >
         <div class="task-info">
-          <span class="task-icon" :class="{ watched: task.watched }">●</span>
+          <span class="task-icon" :class="getTaskIconClass(task)">●</span>
           <span class="task-name">{{ task.name }}</span>
+          <span
+            v-if="store.getUnreadAlertCount(task.name) > 0"
+            class="unread-badge"
+            :class="{ 'is-unwatched': !task.watched }"
+          >
+            {{ store.getUnreadAlertCount(task.name) }}
+          </span>
         </div>
-
-        <span
-          v-if="getErrorCount(task.name) > 0"
-          class="error-count"
-          :class="{ 'is-gray': !task.watched }"
-        >
-          {{ getErrorCount(task.name) }}
-        </span>
       </div>
 
       <div v-if="filteredTasks.length === 0" class="no-tasks">
@@ -70,11 +76,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useTaskStore } from '../stores/taskStore'
-import { Search } from '@element-plus/icons-vue'
+import { useWsStore } from '../stores/wsStore'
+import { Search, Refresh } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 const store = useTaskStore()
+const wsStore = useWsStore()
 
 const searchQuery = ref('')
 const contextMenuVisible = ref(false)
@@ -92,12 +100,33 @@ const filteredTasks = computed(() => {
   )
 })
 
-function getErrorCount(taskName) {
-  return store.errorCounts[taskName] || 0
+function getTaskIconClass(task) {
+  if (!task.watched) {
+    // 未关注：灰色
+    return 'unwatched'
+  }
+
+  // 被关注时：检查告警和连接状态
+  const hasUnreadAlerts = store.getUnreadAlertCount(task.name) > 0
+  const isConnected = wsStore.isConnected
+
+  if (hasUnreadAlerts || !isConnected) {
+    // 有告警或断开连接：红色
+    return 'alert'
+  }
+
+  // 无告警且已连接：绿色
+  return 'connected'
 }
 
 function selectTask(taskName) {
+  // Clear unread alerts when entering task page
+  store.clearUnreadAlerts(taskName)
   router.push(`/batch-sync/${taskName}`)
+}
+
+function refreshTasks() {
+  store.fetchTasks()
 }
 
 function showContextMenu(event, task) {
@@ -139,17 +168,24 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
-  border-right: 1px solid #e0e0e0;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
 }
 
 .task-list-header {
-  padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .search-input {
-  width: 100%;
+  flex: 1;
+}
+
+.refresh-button {
+  flex-shrink: 0;
 }
 
 .task-list-content {
@@ -161,74 +197,110 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f3f4f6;
   user-select: none;
+  transition: all 0.15s ease;
 }
 
 .task-item:hover {
-  background: #f5f5f5;
+  background: #f9fafb;
 }
 
 .task-item.is-selected {
-  background: #e6f7ff;
-  border-left: 3px solid #1890ff;
-  padding-left: 9px;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  padding-left: 13px;
 }
 
 .task-item.is-unwatched {
-  color: #999;
+  color: #9ca3af;
 }
 
 .task-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
 }
 
 .task-icon {
-  font-size: 8px;
-  color: #ccc;
+  font-size: 10px;
+  transition: color 0.15s ease;
 }
 
-.task-icon.watched {
-  color: #faad14;
+.task-icon.unwatched {
+  color: #d1d5db;
+}
+
+.task-icon.connected {
+  color: #10b981;
+}
+
+.task-icon.alert {
+  color: #ef4444;
+  animation: pulse-icon 2s ease-in-out infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .task-name {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  color: #111827;
 }
 
-.error-count {
-  font-size: 12px;
-  padding: 2px 6px;
-  background: #ff4d4f;
-  color: #fff;
+.task-item.is-unwatched .task-name {
+  color: #9ca3af;
+  font-weight: 400;
 }
 
-.error-count.is-gray {
-  background: #999;
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: #ffffff;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.unread-badge.is-unwatched {
+  background: #9ca3af;
+  color: #ffffff;
 }
 
 .no-tasks {
-  padding: 40px 20px;
+  padding: 48px 20px;
   text-align: center;
-  color: #999;
-  font-size: 13px;
+  color: #9ca3af;
+  font-size: 14px;
 }
 
 .task-list-footer {
-  padding: 8px 12px;
-  border-top: 1px solid #e0e0e0;
-  font-size: 12px;
-  color: #999;
-  background: #fafafa;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
 }
 
 /* Context Menu */
@@ -244,19 +316,25 @@ onUnmounted(() => {
 .context-menu {
   position: fixed;
   z-index: 1000;
-  min-width: 120px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  padding: 4px 0;
+  min-width: 140px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .context-menu-item {
-  padding: 8px 16px;
+  padding: 8px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
+  color: #374151;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
 .context-menu-item:hover {
-  background: #f5f5f5;
+  background: #f3f4f6;
+  color: #111827;
 }
 </style>

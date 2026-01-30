@@ -7,17 +7,11 @@ const routes = [
   },
   {
     path: '/batch-sync',
-    name: 'batch-sync',
-    children: [
-      {
-        path: '',
-        name: 'batch-sync-home'
-      },
-      {
-        path: ':taskName',
-        name: 'batch-sync-task'
-      }
-    ]
+    name: 'batch-sync'
+  },
+  {
+    path: '/batch-sync/:taskName',
+    name: 'batch-sync-task'
   }
 ]
 

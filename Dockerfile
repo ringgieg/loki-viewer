@@ -20,8 +20,22 @@ RUN npm run build
 # Stage 2: Production nginx server
 FROM nginx:alpine
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# Install Python, pip, and common utilities
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    curl \
+    wget \
+    traceroute \
+    iputils \
+    bind-tools \
+    vim \
+    jq \
+    && ln -sf python3 /usr/bin/python
+
+# Install Python requests library
+RUN pip3 install --no-cache-dir requests && \
+    ln -sf pip3 /usr/bin/pip
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
@@ -31,6 +45,14 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy tool verification script
+COPY test-tools.sh /test-tools.sh
+RUN chmod +x /test-tools.sh
+
+# Copy Python examples
+COPY examples/ /examples/
+RUN chmod +x /examples/*.py 2>/dev/null || true
 
 # Expose port 80
 EXPOSE 80

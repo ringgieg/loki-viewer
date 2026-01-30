@@ -20,6 +20,9 @@ export const useWsStore = defineStore('ws', () => {
   // Track if we had a connection before (to detect disconnection vs initial state)
   let hadConnection = false
 
+  // Track if this is the first connection (to avoid triggering alerts on initial load)
+  let isInitializing = true
+
   /**
    * Start the WebSocket connection for entire batch-sync service
    */
@@ -29,6 +32,9 @@ export const useWsStore = defineStore('ws', () => {
     // Get stores inside connect() to ensure Pinia is initialized
     const alertStore = useAlertStore()
     const taskStore = useTaskStore()
+
+    // Set initialization flag
+    isInitializing = true
 
     // Query for all batch-sync logs (no task_name filter)
     const query = buildTaskQuery(null, { service: 'Batch-Sync' })
@@ -40,9 +46,20 @@ export const useWsStore = defineStore('ws', () => {
           const taskName = log.taskName || log.labels?.task_name
           const level = (log.level || 'INFO').toUpperCase()
 
-          if (level === 'ERROR' && taskName && taskStore.watchedTasks.has(taskName)) {
+          // Skip alert triggering during initial connection to avoid false alerts
+          if (!isInitializing && level === 'ERROR' && taskName && taskStore.watchedTasks.has(taskName)) {
             console.log('ERROR log detected for watched task:', taskName)
+
+            // Trigger global alert overlay
             alertStore.triggerAlert('error')
+
+            // Increment unread count if not viewing this task
+            const currentPath = window.location.pathname
+            const taskPath = `/batch-sync/${taskName}`
+            if (currentPath !== taskPath) {
+              taskStore.incrementUnreadAlerts(taskName)
+              console.log(`Unread alert count for ${taskName}:`, taskStore.getUnreadAlertCount(taskName))
+            }
           }
         }
 
@@ -54,6 +71,13 @@ export const useWsStore = defineStore('ws', () => {
         console.log('WebSocket connected to batch-sync service')
         // Remove disconnect alert when reconnected
         alertStore.removeAlertReason('disconnect')
+
+        // Delay marking initialization as complete to allow initial historical logs to load
+        // This prevents false alerts from historical ERROR logs on page load
+        setTimeout(() => {
+          isInitializing = false
+          console.log('Initialization complete, now monitoring for new errors')
+        }, 2000)
       },
       onClose: () => {
         isConnected.value = false

@@ -56,12 +56,15 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { queryTaskLogs } from '../api/loki'
+import { queryTaskLogs, filterLogsByLevel } from '../api/loki'
 import { useWsStore } from '../stores/wsStore'
+import { useTaskStore } from '../stores/taskStore'
+import { getConfig } from '../utils/config'
 import VirtualLogList from './VirtualLogList.vue'
 
 const route = useRoute()
 const wsStore = useWsStore()
+const taskStore = useTaskStore()
 
 const currentTask = computed(() => route.params.taskName || null)
 
@@ -70,9 +73,15 @@ const loading = ref(false)
 const initialLoading = ref(false)
 const hasMore = ref(true)
 const nextCursor = ref(null)
-const selectedLevel = ref('WARN')
+const selectedLevel = ref(getConfig('defaultLogLevel', ''))
+
+// Get service name from config
+const serviceName = getConfig('defaultService', 'Batch-Sync')
+const logsPerPage = getConfig('logsPerPage', 500)
+const newLogHighlightDuration = getConfig('alert.newLogHighlightDuration', 3000)
 
 let unsubscribe = null
+let highlightTimer = null
 
 const connectionStatus = computed(() => {
   if (wsStore.isConnected) return 'connected'
@@ -91,6 +100,8 @@ watch(currentTask, async (newTask, oldTask) => {
   hasMore.value = true
 
   if (newTask) {
+    // Clear unread alerts when viewing this task
+    taskStore.clearUnreadAlerts(newTask)
     await fetchInitialLogs()
     startStreaming()
   }
@@ -118,7 +129,7 @@ async function fetchInitialLogs() {
   hasMore.value = true
 
   try {
-    const options = { service: 'Batch-Sync', limit: 500 }
+    const options = { service: serviceName, limit: logsPerPage }
     if (selectedLevel.value) options.level = selectedLevel.value
 
     console.log('[LogViewer] Query options:', options)
@@ -141,8 +152,8 @@ async function loadMoreLogs() {
 
   try {
     const options = {
-      service: 'Batch-Sync',
-      limit: 500,
+      service: serviceName,
+      limit: logsPerPage,
       cursor: nextCursor.value
     }
     if (selectedLevel.value) options.level = selectedLevel.value
@@ -163,32 +174,29 @@ function startStreaming() {
 
   // Subscribe to logs for this specific task
   unsubscribe = wsStore.subscribe(currentTask.value, (newLogs) => {
-    // Filter by level if needed
-    let filteredLogs = newLogs
-    if (selectedLevel.value) {
-      const levelOrder = ['ERROR', 'WARN', 'INFO', 'DEBUG']
-      const selectedIndex = levelOrder.indexOf(selectedLevel.value)
-      if (selectedIndex >= 0) {
-        const allowedLevels = levelOrder.slice(0, selectedIndex + 1)
-        filteredLogs = newLogs.filter(log =>
-          allowedLevels.includes((log.level || 'INFO').toUpperCase())
-        )
-      }
-    }
+    // Filter by level using unified logic
+    const filteredLogs = filterLogsByLevel(newLogs, selectedLevel.value)
 
     if (filteredLogs.length === 0) return
 
     const markedLogs = filteredLogs.map(log => ({ ...log, isNew: true }))
     logs.value = [...markedLogs, ...logs.value]
 
-    setTimeout(() => {
+    // Clear previous timer to avoid memory leak
+    if (highlightTimer) {
+      clearTimeout(highlightTimer)
+    }
+
+    // Set new timer to remove highlight
+    highlightTimer = setTimeout(() => {
       logs.value = logs.value.map(log => {
         if (markedLogs.find(nl => nl.id === log.id)) {
           return { ...log, isNew: false }
         }
         return log
       })
-    }, 3000)
+      highlightTimer = null
+    }, newLogHighlightDuration)
   })
 }
 
@@ -199,10 +207,13 @@ function stopStreaming() {
   }
 }
 
-
-
 onUnmounted(() => {
   stopStreaming()
+  // Clean up highlight timer to prevent memory leak
+  if (highlightTimer) {
+    clearTimeout(highlightTimer)
+    highlightTimer = null
+  }
 })
 </script>
 
@@ -211,41 +222,48 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: #ffffff;
 }
 
 .log-viewer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #fafafa;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .task-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.025em;
 }
 
 .connection-status {
-  font-size: 12px;
-  color: #999;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: #f3f4f6;
 }
 
 .connection-status.connected {
-  color: #52c41a;
+  color: #059669;
+  background: #d1fae5;
 }
 
 .connection-status.disconnected {
-  color: #ff4d4f;
+  color: #dc2626;
+  background: #fee2e2;
 }
 
 .header-filters {
@@ -257,6 +275,7 @@ onUnmounted(() => {
 .log-viewer-content {
   flex: 1;
   overflow: hidden;
+  background: #f9fafb;
 }
 
 .loading-state,
@@ -265,7 +284,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #999;
-  font-size: 14px;
+  color: #9ca3af;
+  font-size: 15px;
+  font-weight: 500;
 }
 </style>
