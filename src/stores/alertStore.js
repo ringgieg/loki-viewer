@@ -11,6 +11,9 @@ export const useAlertStore = defineStore('alert', () => {
   // Mute state (timestamp in milliseconds)
   const muteUntil = ref(loadMuteState())
 
+  // Timer for checking mute expiration (兜底机制)
+  let muteCheckTimer = null
+
   // Load mute state from localStorage
   function loadMuteState() {
     try {
@@ -86,14 +89,52 @@ export const useAlertStore = defineStore('alert', () => {
   }
 
   /**
+   * Check if mute has expired and clear it (兜底机制)
+   */
+  function checkMuteExpiration() {
+    if (muteUntil.value > 0 && muteUntil.value <= Date.now()) {
+      console.log('Mute expired, auto-clearing (兜底机制触发)')
+      muteUntil.value = 0
+      saveMuteState()
+      stopMuteCheckTimer()
+    }
+  }
+
+  /**
+   * Start periodic mute check timer (兜底机制)
+   * Checks every minute to ensure mute expires correctly
+   */
+  function startMuteCheckTimer() {
+    stopMuteCheckTimer() // Clear any existing timer
+    // Check every 30 seconds as a fallback mechanism
+    muteCheckTimer = setInterval(() => {
+      checkMuteExpiration()
+    }, 30000) // 30秒检查一次
+    console.log('Mute check timer started (兜底定时器已启动)')
+  }
+
+  /**
+   * Stop periodic mute check timer
+   */
+  function stopMuteCheckTimer() {
+    if (muteCheckTimer) {
+      clearInterval(muteCheckTimer)
+      muteCheckTimer = null
+      console.log('Mute check timer stopped (兜底定时器已停止)')
+    }
+  }
+
+  /**
    * Set mute duration
    * @param {number} minutes - Duration in minutes (0 to unmute)
    */
   function setMute(minutes) {
     if (minutes === 0) {
       muteUntil.value = 0
+      stopMuteCheckTimer()
     } else {
       muteUntil.value = Date.now() + minutes * 60 * 1000
+      startMuteCheckTimer() // 启动兜底定时器
     }
     saveMuteState()
     console.log(minutes === 0 ? 'Alert unmuted' : `Alert muted for ${minutes} minutes`)
@@ -105,6 +146,12 @@ export const useAlertStore = defineStore('alert', () => {
   function getRemainingMuteMinutes() {
     if (!isMuted.value) return 0
     return Math.ceil((muteUntil.value - Date.now()) / 60000)
+  }
+
+  // Initialize: start timer if muted state was restored from localStorage
+  if (muteUntil.value > Date.now()) {
+    startMuteCheckTimer()
+    console.log('Restored mute state, starting check timer (恢复静默状态，启动兜底定时器)')
   }
 
   return {
@@ -119,6 +166,7 @@ export const useAlertStore = defineStore('alert', () => {
     dismissAlert,
     removeAlertReason,
     setMute,
-    getRemainingMuteMinutes
+    getRemainingMuteMinutes,
+    checkMuteExpiration // 暴露手动检查方法
   }
 })

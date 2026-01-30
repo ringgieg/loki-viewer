@@ -49,7 +49,8 @@
     </div>
 
     <div class="task-list-footer">
-      共 {{ store.tasks.length }} 个任务
+      <span class="task-count">共 {{ store.tasks.length }} 个任务</span>
+      <MuteButton v-if="kioskMode" size="small" />
     </div>
 
     <!-- Context Menu -->
@@ -79,6 +80,15 @@ import { useTaskStore } from '../stores/taskStore'
 import { useWsStore } from '../stores/wsStore'
 import { useServiceStore } from '../stores/serviceStore'
 import { Search, Refresh } from '@element-plus/icons-vue'
+import MuteButton from './MuteButton.vue'
+
+// Props
+const props = defineProps({
+  kioskMode: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const router = useRouter()
 const route = useRoute()
@@ -299,11 +309,19 @@ onUnmounted(() => {
 }
 
 .task-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--el-border-color-lighter);
   font-size: 13px;
   color: var(--el-text-color-secondary);
   background: var(--el-fill-color-lighter);
+}
+
+.task-count {
+  flex: 1;
 }
 
 /* Context Menu */

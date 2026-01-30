@@ -1,14 +1,14 @@
 <template>
   <div class="app-container">
     <AlertOverlay />
-    <NavBar>
+    <NavBar v-if="!isKioskMode">
       <template #actions>
         <MuteButton />
       </template>
     </NavBar>
     <div class="app-main">
       <aside class="app-sidebar">
-        <TaskList />
+        <TaskList :kiosk-mode="isKioskMode" />
       </aside>
       <main class="app-content">
         <LogViewer />
@@ -18,7 +18,8 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useServiceStore } from './stores/serviceStore'
 import { useTaskStore } from './stores/taskStore'
 import { useWsStore } from './stores/wsStore'
@@ -28,9 +29,13 @@ import LogViewer from './components/LogViewer.vue'
 import AlertOverlay from './components/AlertOverlay.vue'
 import MuteButton from './components/MuteButton.vue'
 
+const route = useRoute()
 const serviceStore = useServiceStore()
 const taskStore = useTaskStore()
 const wsStore = useWsStore()
+
+// Check if kiosk mode is enabled via URL parameter
+const isKioskMode = computed(() => route.query.kiosk === '1')
 
 onMounted(async () => {
   // Initialize service store first (sets up config getters)

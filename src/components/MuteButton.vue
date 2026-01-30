@@ -1,6 +1,6 @@
 <template>
   <el-dropdown @command="handleMuteCommand" trigger="click" placement="bottom-end">
-    <el-button :type="alertStore.isMuted ? 'warning' : 'default'" size="default">
+    <el-button :type="alertStore.isMuted ? 'warning' : 'default'" :size="size">
       <el-icon><Bell /></el-icon>
       <span>静默设置</span>
       <el-badge
@@ -39,6 +39,14 @@
 <script setup>
 import { useAlertStore } from '../stores/alertStore'
 import { Bell, Clock, CircleClose } from '@element-plus/icons-vue'
+
+// Props
+const props = defineProps({
+  size: {
+    type: String,
+    default: 'default'
+  }
+})
 
 const alertStore = useAlertStore()
 
