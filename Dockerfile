@@ -18,30 +18,37 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production nginx server
-FROM nginx:alpine
+FROM ubuntu:22.04
 
-# Install Python, pip, and common utilities
-RUN apk add --no-cache \
+# Set environment to non-interactive to avoid prompts during build
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install nginx, Python, pip, and common utilities
+RUN apt-get update && apt-get install -y \
+    nginx \
     python3 \
-    py3-pip \
+    python3-pip \
     curl \
     wget \
     traceroute \
-    iputils \
-    bind-tools \
+    iputils-ping \
+    dnsutils \
     vim \
     jq \
-    && ln -sf python3 /usr/bin/python
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/bin/pip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python requests library
-RUN pip3 install --no-cache-dir requests && \
-    ln -sf pip3 /usr/bin/pip
+RUN pip3 install --no-cache-dir requests
 
 # Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
+RUN rm -f /etc/nginx/sites-enabled/default
 
 # Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/sites-available/default
+RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
