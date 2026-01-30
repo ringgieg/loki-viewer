@@ -1,29 +1,35 @@
 /**
- * Loki Viewer Runtime Configuration
+ * Loki Viewer 运行时配置
  *
- * This file can be modified after build without recompiling.
- * It will be served as a static file from the public directory.
+ * 此文件可在构建后修改，无需重新编译。
+ * 它将作为静态文件从 public 目录提供。
  */
 window.APP_CONFIG = {
-  // Page title (browser tab, optional, leave empty to use default "Loki Log Viewer")
+  // 页面标题（浏览器标签页，可选，留空则使用默认值 "Loki Log Viewer"）
   pageTitle: '',
 
-  // Active service ID (which service to monitor on startup)
+  // 活动服务 ID（启动时监控哪个服务）
   activeService: 'batch-sync',
 
-  // Services configuration
-  // Each service has its own complete configuration
+  // 服务配置
+  // 每个服务都有自己的完整配置
   services: [
     {
       id: 'batch-sync',
       displayName: 'Batch-Sync Service',
       loki: {
-        // API base path (default: '/loki/api/v1')
+        // API 基础路径（默认值：'/loki/api/v1'）
         apiBasePath: '/loki/api/v1',
-        // WebSocket settings (optional, leave empty for auto-detection)
-        wsProtocol: '',  // 'ws' or 'wss', auto-detect if empty
-        wsHost: '',      // hostname:port, use window.location.host if empty
-        // Service-specific labels
+        // WebSocket 设置（可选，留空则自动检测）
+        wsProtocol: '',  // 'ws' 或 'wss'，留空则自动检测
+        wsHost: '',      // hostname:port，留空则使用 window.location.host
+        // WebSocket 尾部日志参数
+        tailLimit: 100,      // 尾部日志数量（默认值：100）
+        tailDelayFor: '0',   // 尾部日志延迟（默认值：'0'）
+        // API 重试设置
+        maxRetries: 3,       // API 调用最大重试次数（默认值：3）
+        retryBaseDelay: 1000, // 指数退避基础延迟，单位毫秒（默认值：1000）
+        // 服务特定标签
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
@@ -32,31 +38,37 @@ window.APP_CONFIG = {
       },
       defaultLogLevel: '',
       logsPerPage: 500,
-      // WebSocket settings
+      // WebSocket 设置
       websocket: {
         maxReconnectAttempts: 5,
         reconnectDelay: 3000,
-        initializationDelay: 2000  // Delay before monitoring starts (milliseconds)
+        initializationDelay: 2000  // 监控开始前的延迟（毫秒）
       },
-      // Alert settings
+      // 告警设置
       alert: {
-        newLogHighlightDuration: 3000  // milliseconds
+        newLogHighlightDuration: 3000  // 新日志高亮持续时间（毫秒）
       },
-      // Query settings
+      // 查询设置
       query: {
-        defaultTimeRangeDays: 7  // Default: query logs from last 7 days
+        defaultTimeRangeDays: 30  // 默认值：查询最近 7 天的日志
       }
     },
     {
       id: 'data-service',
       displayName: 'Data Service',
       loki: {
-        // API base path (default: '/loki/api/v1')
+        // API 基础路径（默认值：'/loki/api/v1'）
         apiBasePath: '/loki/api/v1',
-        // WebSocket settings (optional, leave empty for auto-detection)
-        wsProtocol: '',  // 'ws' or 'wss', auto-detect if empty
-        wsHost: '',      // hostname:port, use window.location.host if empty
-        // Service-specific labels
+        // WebSocket 设置（可选，留空则自动检测）
+        wsProtocol: '',  // 'ws' 或 'wss'，留空则自动检测
+        wsHost: '',      // hostname:port，留空则使用 window.location.host
+        // WebSocket 尾部日志参数
+        tailLimit: 100,      // 尾部日志数量（默认值：100）
+        tailDelayFor: '0',   // 尾部日志延迟（默认值：'0'）
+        // API 重试设置
+        maxRetries: 3,       // API 调用最大重试次数（默认值：3）
+        retryBaseDelay: 1000, // 指数退避基础延迟，单位毫秒（默认值：1000）
+        // 服务特定标签
         fixedLabels: {
           job: 'api',
           service: 'Data-Service'
@@ -65,36 +77,31 @@ window.APP_CONFIG = {
       },
       defaultLogLevel: 'WARN',
       logsPerPage: 1000,
-      // WebSocket settings
+      // WebSocket 设置
       websocket: {
         maxReconnectAttempts: 5,
         reconnectDelay: 3000,
-        initializationDelay: 2000  // Delay before monitoring starts (milliseconds)
+        initializationDelay: 2000  // 监控开始前的延迟（毫秒）
       },
-      // Alert settings
+      // 告警设置
       alert: {
-        newLogHighlightDuration: 3000  // milliseconds
+        newLogHighlightDuration: 3000  // 新日志高亮持续时间（毫秒）
       },
-      // Query settings
+      // 查询设置
       query: {
-        defaultTimeRangeDays: 7  // Default: query logs from last 7 days
+        defaultTimeRangeDays: 30  // 默认值：查询最近 7 天的日志
       }
     }
   ],
 
   // ============================================================
-  // GLOBAL CONFIGURATION (shared by all services)
+  // 全局配置（所有服务共享）
   // ============================================================
 
-  // Routing configuration
-  routing: {
-    basePath: '/view'  // Base path for task routes (e.g., /logs/:serviceId/:taskName)
-  },
-
-  // Virtual scroll settings
+  // 虚拟滚动设置
   virtualScroll: {
     estimatedItemHeight: 60,
     bufferSize: 10,
-    loadMoreThreshold: 0.2  // Load more when scrolled to 20% from bottom
+    loadMoreThreshold: 0.2  // 滚动到距离底部 20% 时加载更多
   }
 }
