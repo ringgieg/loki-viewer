@@ -33,7 +33,10 @@
           <el-icon v-else><ArrowRight /></el-icon>
         </span>
       </div>
-      <div class="log-content" v-html="escapeHtml(item.log.line)"></div>
+      <div class="log-content" v-html="escapeHtml(getTruncatedContent(item.log))"></div>
+      <div v-if="shouldShowTruncateHint(item.log)" class="truncate-hint">
+        ...（点击展开查看完整日志）
+      </div>
 
       <!-- Expanded details section -->
       <div v-if="isExpanded(item.log.id)" class="log-details">
@@ -195,6 +198,29 @@ function escapeHtml(text) {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+function getTruncatedContent(log) {
+  // If expanded, show full content
+  if (isExpanded(log.id)) {
+    return log.line
+  }
+
+  // Truncate to first 10 lines if not expanded
+  const lines = log.line ? log.line.split('\n') : []
+  if (lines.length > 10) {
+    return lines.slice(0, 10).join('\n')
+  }
+  return log.line
+}
+
+function shouldShowTruncateHint(log) {
+  // Only show hint if not expanded and content has more than 10 lines
+  if (isExpanded(log.id)) {
+    return false
+  }
+  const lines = log.line ? log.line.split('\n') : []
+  return lines.length > 10
 }
 
 function isExpanded(logId) {
@@ -407,6 +433,15 @@ onUnmounted(() => {
   user-select: text;
   cursor: text;
   padding-left: 4px;
+}
+
+.truncate-hint {
+  font-size: 12px;
+  color: var(--el-color-info);
+  font-style: italic;
+  margin-top: 4px;
+  padding-left: 4px;
+  user-select: none;
 }
 
 .loading-more,
