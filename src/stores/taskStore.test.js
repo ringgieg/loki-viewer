@@ -8,6 +8,13 @@ vi.mock('../api/loki', () => ({
   getTaskNames: vi.fn()
 }))
 
+// Mock serviceStore
+vi.mock('./serviceStore', () => ({
+  useServiceStore: vi.fn(() => ({
+    getCurrentServiceId: vi.fn(() => 'test-service')
+  }))
+}))
+
 describe('taskStore', () => {
   let store
 
@@ -45,9 +52,9 @@ describe('taskStore', () => {
 
       expect(loki.getTaskNames).toHaveBeenCalledOnce()
       expect(store.tasks).toHaveLength(3)
-      expect(store.tasks[0]).toEqual({ name: 'task-1', watched: false })
-      expect(store.tasks[1]).toEqual({ name: 'task-2', watched: true })
-      expect(store.tasks[2]).toEqual({ name: 'task-3', watched: false })
+      expect(store.tasks[0]).toEqual({ name: 'task-1', watched: false, existsInLoki: true })
+      expect(store.tasks[1]).toEqual({ name: 'task-2', watched: true, existsInLoki: true })
+      expect(store.tasks[2]).toEqual({ name: 'task-3', watched: false, existsInLoki: true })
     })
 
     it('should set loading state during fetch', async () => {
@@ -72,6 +79,20 @@ describe('taskStore', () => {
       expect(store.tasks).toEqual([])
 
       consoleError.mockRestore()
+    })
+
+    it('should include watched tasks even if they are not in Loki', async () => {
+      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2'])
+
+      // Pre-set watched tasks including one not in Loki
+      store.watchedTasks = new Set(['task-2', 'task-not-in-loki'])
+
+      await store.fetchTasks()
+
+      expect(store.tasks).toHaveLength(3)
+      expect(store.tasks).toContainEqual({ name: 'task-1', watched: false, existsInLoki: true })
+      expect(store.tasks).toContainEqual({ name: 'task-2', watched: true, existsInLoki: true })
+      expect(store.tasks).toContainEqual({ name: 'task-not-in-loki', watched: true, existsInLoki: false })
     })
   })
 
@@ -104,7 +125,7 @@ describe('taskStore', () => {
       store.toggleWatched('task-1')
       store.toggleWatched('task-2')
 
-      const saved = JSON.parse(localStorage.getItem('loki-viewer-watched-tasks'))
+      const saved = JSON.parse(localStorage.getItem('dashboard-watched-tasks-test-service'))
       expect(saved).toEqual(['task-1', 'task-2'])
     })
   })
@@ -161,7 +182,7 @@ describe('taskStore', () => {
 
   describe('initialize()', () => {
     it('should load watched tasks and fetch tasks from API', async () => {
-      localStorage.setItem('loki-viewer-watched-tasks', JSON.stringify(['task-2']))
+      localStorage.setItem('dashboard-watched-tasks-test-service', JSON.stringify(['task-2']))
       loki.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
 
       await store.initialize()
@@ -169,6 +190,28 @@ describe('taskStore', () => {
       expect(store.watchedTasks).toEqual(new Set(['task-2']))
       expect(store.tasks).toHaveLength(3)
       expect(store.tasks.find(t => t.name === 'task-2').watched).toBe(true)
+    })
+
+    it('should isolate watched tasks by service', async () => {
+      // Set watched tasks for test-service
+      localStorage.setItem('dashboard-watched-tasks-test-service', JSON.stringify(['task-1']))
+      // Set different watched tasks for another service
+      localStorage.setItem('dashboard-watched-tasks-other-service', JSON.stringify(['task-2', 'task-3']))
+
+      // Mock API response
+      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
+
+      // Initialize (should only load test-service's tasks)
+      await store.initialize()
+
+      // Should only have task-1 as watched (from test-service)
+      expect(store.watchedTasks).toEqual(new Set(['task-1']))
+      expect(store.watchedTasks.has('task-2')).toBe(false)
+      expect(store.watchedTasks.has('task-3')).toBe(false)
+
+      // Verify task states
+      const watchedTask = store.tasks.find(t => t.name === 'task-1')
+      expect(watchedTask.watched).toBe(true)
     })
   })
 })

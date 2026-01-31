@@ -17,7 +17,9 @@ vi.mock('element-plus', () => ({
 vi.mock('@element-plus/icons-vue', () => ({
   Search: { name: 'Search' },
   Refresh: { name: 'Refresh' },
-  CircleClose: { name: 'CircleClose' }
+  CircleClose: { name: 'CircleClose' },
+  FullScreen: { name: 'FullScreen' },
+  Close: { name: 'Close' }
 }))
 
 describe('TaskList.vue', () => {
@@ -55,8 +57,8 @@ describe('TaskList.vue', () => {
   it('should render task list correctly', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true },
-      { name: 'task-2', watched: false }
+      { name: 'task-1', watched: true, existsInLoki: true },
+      { name: 'task-2', watched: false, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -70,9 +72,9 @@ describe('TaskList.vue', () => {
   it('should display total task count in footer', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true },
-      { name: 'task-2', watched: false },
-      { name: 'task-3', watched: true }
+      { name: 'task-1', watched: true, existsInLoki: true },
+      { name: 'task-2', watched: false, existsInLoki: true },
+      { name: 'task-3', watched: true, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -84,9 +86,9 @@ describe('TaskList.vue', () => {
   it('should filter tasks based on search query', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'batch-sync-task', watched: true },
-      { name: 'data-service-task', watched: false },
-      { name: 'batch-upload-task', watched: true }
+      { name: 'batch-sync-task', watched: true, existsInLoki: true },
+      { name: 'data-service-task', watched: false, existsInLoki: true },
+      { name: 'batch-upload-task', watched: true, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -107,7 +109,7 @@ describe('TaskList.vue', () => {
   it('should show "no tasks" message when filtered list is empty', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true }
+      { name: 'task-1', watched: true, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -122,7 +124,7 @@ describe('TaskList.vue', () => {
   it('should highlight selected task', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true },
+      { name: 'task-1', watched: true, existsInLoki: true },
       { name: 'task-2', watched: false }
     ]
 
@@ -137,7 +139,7 @@ describe('TaskList.vue', () => {
   it('should apply unwatched style to unwatched tasks', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true },
+      { name: 'task-1', watched: true, existsInLoki: true },
       { name: 'task-2', watched: false }
     ]
 
@@ -151,7 +153,7 @@ describe('TaskList.vue', () => {
   it('should show watched icon for watched tasks', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true },
+      { name: 'task-1', watched: true, existsInLoki: true },
       { name: 'task-2', watched: false }
     ]
 
@@ -167,7 +169,7 @@ describe('TaskList.vue', () => {
   it('should navigate to task on click', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'my-task', watched: true }
+      { name: 'my-task', watched: true, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -181,7 +183,7 @@ describe('TaskList.vue', () => {
   it('should show context menu on right-click', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false }
+      { name: 'task-1', watched: false, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -202,7 +204,7 @@ describe('TaskList.vue', () => {
   it('should close context menu on overlay click', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false }
+      { name: 'task-1', watched: false, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -222,7 +224,7 @@ describe('TaskList.vue', () => {
   it('should toggle watched status via context menu', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false }
+      { name: 'task-1', watched: false, existsInLoki: true }
     ]
     const toggleSpy = vi.spyOn(store, 'toggleWatched')
 
@@ -244,7 +246,7 @@ describe('TaskList.vue', () => {
   it('should show "设为关注" for unwatched tasks in context menu', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false }
+      { name: 'task-1', watched: false, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -260,7 +262,7 @@ describe('TaskList.vue', () => {
   it('should show "取消关注" for watched tasks in context menu', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true }
+      { name: 'task-1', watched: true, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -276,7 +278,7 @@ describe('TaskList.vue', () => {
   it('should close context menu on Escape key', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false }
+      { name: 'task-1', watched: false, existsInLoki: true }
     ]
 
     const wrapper = createWrapper()
@@ -305,5 +307,19 @@ describe('TaskList.vue', () => {
     // v-loading is an Element Plus directive that doesn't appear as an HTML attribute
     // Instead, test that the store loading state is correctly set
     expect(store.loading).toBe(true)
+  })
+
+  it('should show "无日志" badge for tasks not in Loki', () => {
+    const store = useTaskStore()
+    store.tasks = [
+      { name: 'task-in-loki', watched: true, existsInLoki: true },
+      { name: 'task-not-in-loki', watched: true, existsInLoki: false }
+    ]
+
+    const wrapper = createWrapper()
+
+    const badges = wrapper.findAll('.not-in-loki-badge')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe('无日志')
   })
 })

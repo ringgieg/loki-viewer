@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getTaskNames } from '../api/loki'
+import { useServiceStore } from './serviceStore'
 
-const STORAGE_KEY = 'loki-viewer-watched-tasks'
+const STORAGE_KEY_PREFIX = 'dashboard-watched-tasks'
 
 export const useTaskStore = defineStore('task', () => {
   // State
@@ -13,12 +14,22 @@ export const useTaskStore = defineStore('task', () => {
   // Unread alerts count per task: Object {taskName: count}
   const unreadAlerts = ref({})
 
+  // Get storage key for current service
+  function getStorageKey() {
+    const serviceStore = useServiceStore()
+    const serviceId = serviceStore.getCurrentServiceId()
+    return `${STORAGE_KEY_PREFIX}-${serviceId}`
+  }
+
   // Load watched tasks from localStorage
   function loadWatchedTasks() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(getStorageKey())
       if (saved) {
         watchedTasks.value = new Set(JSON.parse(saved))
+      } else {
+        // Reset to empty if no saved data for this service
+        watchedTasks.value = new Set()
       }
     } catch (e) {
       console.error('Error loading watched tasks:', e)
@@ -32,7 +43,7 @@ export const useTaskStore = defineStore('task', () => {
   // Save watched tasks to localStorage
   function saveWatchedTasks() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...watchedTasks.value]))
+      localStorage.setItem(getStorageKey(), JSON.stringify([...watchedTasks.value]))
     } catch (e) {
       console.error('Error saving watched tasks:', e)
       ElMessage.error({
@@ -53,9 +64,16 @@ export const useTaskStore = defineStore('task', () => {
     loading.value = true
     try {
       const taskNames = await getTaskNames()
-      tasks.value = taskNames.map(name => ({
+      const lokiTaskSet = new Set(taskNames)
+
+      // Merge tasks from Loki with watched tasks
+      // This ensures watched tasks are always shown, even if they don't exist in Loki yet
+      const allTaskNames = new Set([...taskNames, ...watchedTasks.value])
+
+      tasks.value = Array.from(allTaskNames).map(name => ({
         name,
-        watched: watchedTasks.value.has(name)
+        watched: watchedTasks.value.has(name),
+        existsInLoki: lokiTaskSet.has(name) // Flag to indicate if task has logs in Loki
       }))
     } catch (e) {
       console.error('Error fetching tasks:', e)
@@ -68,6 +86,18 @@ export const useTaskStore = defineStore('task', () => {
   function clearTasks() {
     tasks.value = []
     unreadAlerts.value = {}
+  }
+
+  // Reload tasks for current service (called when service switches)
+  async function reloadForService() {
+    // Clear current state
+    clearTasks()
+
+    // Load watched tasks for the new service
+    loadWatchedTasks()
+
+    // Fetch tasks from API
+    await fetchTasks()
   }
 
   // Toggle watched status for a task
@@ -130,6 +160,7 @@ export const useTaskStore = defineStore('task', () => {
     fetchTasks,
     loadTasks: fetchTasks,  // Alias for consistency
     clearTasks,
+    reloadForService,
     toggleWatched,
     incrementUnreadAlerts,
     clearUnreadAlerts,

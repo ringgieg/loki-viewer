@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useServiceStore } from './serviceStore'
 
-const MUTE_STORAGE_KEY = 'loki-viewer-mute-until'
+const MUTE_STORAGE_KEY_PREFIX = 'dashboard-mute-until'
 
 export const useAlertStore = defineStore('alert', () => {
   // Alert state
@@ -14,10 +15,17 @@ export const useAlertStore = defineStore('alert', () => {
   // Timer for checking mute expiration (兜底机制)
   let muteCheckTimer = null
 
+  // Get storage key for current service
+  function getStorageKey() {
+    const serviceStore = useServiceStore()
+    const serviceId = serviceStore.getCurrentServiceId()
+    return `${MUTE_STORAGE_KEY_PREFIX}-${serviceId}`
+  }
+
   // Load mute state from localStorage
   function loadMuteState() {
     try {
-      const saved = localStorage.getItem(MUTE_STORAGE_KEY)
+      const saved = localStorage.getItem(getStorageKey())
       if (saved) {
         const timestamp = parseInt(saved, 10)
         // Only restore if still in the future
@@ -35,9 +43,9 @@ export const useAlertStore = defineStore('alert', () => {
   function saveMuteState() {
     try {
       if (muteUntil.value > 0) {
-        localStorage.setItem(MUTE_STORAGE_KEY, muteUntil.value.toString())
+        localStorage.setItem(getStorageKey(), muteUntil.value.toString())
       } else {
-        localStorage.removeItem(MUTE_STORAGE_KEY)
+        localStorage.removeItem(getStorageKey())
       }
     } catch (e) {
       console.error('Error saving mute state:', e)

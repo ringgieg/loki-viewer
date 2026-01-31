@@ -1,7 +1,7 @@
 {
-  "name": "loki-viewer",
+  "name": "dashboard",
   "version": "1.0.0",
-  "description": "Vue 3 + Element Plus log viewer for Loki",
+  "description": "Vue 3 + Element Plus dashboard for log monitoring",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -37,6 +37,13 @@
           <span class="task-icon" :class="getTaskIconClass(task)">●</span>
           <span class="task-name">{{ task.name }}</span>
           <span
+            v-if="!task.existsInLoki"
+            class="not-in-loki-badge"
+            title="此任务在Loki中暂无日志"
+          >
+            无日志
+          </span>
+          <span
             v-if="store.getUnreadAlertCount(task.name) > 0"
             class="unread-badge"
             :class="{ 'is-unwatched': !task.watched }"
@@ -334,6 +341,21 @@ onUnmounted(() => {
 .task-item.is-unwatched .task-name {
   color: var(--el-text-color-secondary);
   font-weight: 400;
+}
+
+.not-in-loki-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  background: var(--el-fill-color-dark);
+  color: var(--el-text-color-secondary);
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 6px;
+  border: 1px solid var(--el-border-color);
 }
 
 .unread-badge {
