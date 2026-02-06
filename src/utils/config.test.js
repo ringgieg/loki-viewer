@@ -48,14 +48,14 @@ describe('config.js', () => {
 
     it('should return nested config value using dot notation', () => {
       window.APP_CONFIG = {
-        loki: {
+        vmlog: {
           websocket: {
             reconnectDelay: 3000
           }
         }
       }
 
-      expect(getConfig('loki.websocket.reconnectDelay')).toBe(3000)
+      expect(getConfig('vmlog.websocket.reconnectDelay')).toBe(3000)
     })
 
     it('should return deeply nested config value', () => {
@@ -105,7 +105,7 @@ describe('config.js', () => {
         pageTitle: 'Batch-Sync'
       }
 
-      expect(getConfig('loki.websocket.reconnectDelay', 3000)).toBe(3000)
+      expect(getConfig('vmlog.websocket.reconnectDelay', 3000)).toBe(3000)
     })
 
     it('should return undefined when no fallback provided for missing key', () => {
@@ -150,14 +150,14 @@ describe('config.js', () => {
           {
             id: 'batch-sync',
             displayName: 'Batch-Sync Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Batch-Sync' }
             }
           },
           {
             id: 'data-service',
             displayName: 'Data Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Data-Service' }
             }
           }
@@ -212,14 +212,14 @@ describe('config.js', () => {
           {
             id: 'batch-sync',
             displayName: 'Batch-Sync Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Batch-Sync' }
             }
           },
           {
             id: 'data-service',
             displayName: 'Data Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Data-Service' }
             }
           }
@@ -229,7 +229,7 @@ describe('config.js', () => {
       const service = getServiceById('data-service')
       expect(service).toBeDefined()
       expect(service.displayName).toBe('Data Service')
-      expect(service.loki.fixedLabels.service).toBe('Data-Service')
+      expect(service.vmlog.fixedLabels.service).toBe('Data-Service')
     })
 
     it('should return null for non-existent service ID', () => {
@@ -249,7 +249,7 @@ describe('config.js', () => {
           {
             id: 'batch-sync',
             displayName: 'Batch-Sync Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Batch-Sync', job: 'tasks' },
               taskLabel: 'task_name'
             },
@@ -258,7 +258,7 @@ describe('config.js', () => {
           {
             id: 'data-service',
             displayName: 'Data Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Data-Service', job: 'api' },
               taskLabel: 'endpoint'
             },
@@ -267,29 +267,29 @@ describe('config.js', () => {
         ]
       }
 
-      expect(getServiceConfig('data-service', 'loki.fixedLabels.service')).toBe('Data-Service')
-      expect(getServiceConfig('data-service', 'loki.taskLabel')).toBe('endpoint')
+      expect(getServiceConfig('data-service', 'vmlog.fixedLabels.service')).toBe('Data-Service')
+      expect(getServiceConfig('data-service', 'vmlog.taskLabel')).toBe('endpoint')
       expect(getServiceConfig('data-service', 'logsPerPage')).toBe(1000)
     })
 
     it('should fallback to global config if not in service config', () => {
       window.APP_CONFIG = {
         logsPerPage: 500,
-        loki: {
-          apiBasePath: '/loki/api/v1'
+        vmlog: {
+          apiBasePath: '/select/logsql'
         },
         services: [
           {
             id: 'batch-sync',
             displayName: 'Batch-Sync Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Batch-Sync' }
             }
           }
         ]
       }
 
-      expect(getServiceConfig('batch-sync', 'loki.apiBasePath')).toBe('/loki/api/v1')
+      expect(getServiceConfig('batch-sync', 'vmlog.apiBasePath')).toBe('/select/logsql')
       expect(getServiceConfig('batch-sync', 'logsPerPage')).toBe(500)
     })
 
@@ -300,14 +300,14 @@ describe('config.js', () => {
           {
             id: 'batch-sync',
             displayName: 'Batch-Sync Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Batch-Sync' }
             }
           },
           {
             id: 'data-service',
             displayName: 'Data Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Data-Service' },
               taskLabel: 'endpoint'
             }
@@ -315,8 +315,8 @@ describe('config.js', () => {
         ]
       }
 
-      expect(getCurrentServiceConfig('loki.fixedLabels.service')).toBe('Data-Service')
-      expect(getCurrentServiceConfig('loki.taskLabel')).toBe('endpoint')
+      expect(getCurrentServiceConfig('vmlog.fixedLabels.service')).toBe('Data-Service')
+      expect(getCurrentServiceConfig('vmlog.taskLabel')).toBe('endpoint')
     })
 
     it('should use dynamic service ID in getCurrentServiceConfig', () => {
@@ -326,14 +326,14 @@ describe('config.js', () => {
           {
             id: 'batch-sync',
             displayName: 'Batch-Sync Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Batch-Sync' }
             }
           },
           {
             id: 'data-service',
             displayName: 'Data Service',
-            loki: {
+            vmlog: {
               fixedLabels: { service: 'Data-Service' }
             }
           }
@@ -341,7 +341,7 @@ describe('config.js', () => {
       }
 
       setCurrentServiceIdGetter(() => 'data-service')
-      expect(getCurrentServiceConfig('loki.fixedLabels.service')).toBe('Data-Service')
+      expect(getCurrentServiceConfig('vmlog.fixedLabels.service')).toBe('Data-Service')
     })
   })
 })

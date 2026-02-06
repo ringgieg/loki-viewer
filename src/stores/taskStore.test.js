@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useTaskStore } from './taskStore'
-import * as loki from '../api/loki'
+import * as vmlog from '../api/vmlog'
 
-// Mock loki API
-vi.mock('../api/loki', () => ({
+// Mock vmlog API
+vi.mock('../api/vmlog', () => ({
   getTaskNames: vi.fn()
 }))
 
@@ -43,22 +43,22 @@ describe('taskStore', () => {
 
   describe('fetchTasks()', () => {
     it('should fetch tasks from API and mark watched tasks', async () => {
-      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
+      vmlog.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
 
       // Pre-set some watched tasks
       store.watchedTasks = new Set(['task-2'])
 
       await store.fetchTasks()
 
-      expect(loki.getTaskNames).toHaveBeenCalledOnce()
+      expect(vmlog.getTaskNames).toHaveBeenCalledOnce()
       expect(store.tasks).toHaveLength(3)
-      expect(store.tasks[0]).toEqual({ name: 'task-1', watched: false, existsInLoki: true })
-      expect(store.tasks[1]).toEqual({ name: 'task-2', watched: true, existsInLoki: true })
-      expect(store.tasks[2]).toEqual({ name: 'task-3', watched: false, existsInLoki: true })
+      expect(store.tasks[0]).toEqual({ name: 'task-1', watched: false, existsInVmLog: true })
+      expect(store.tasks[1]).toEqual({ name: 'task-2', watched: true, existsInVmLog: true })
+      expect(store.tasks[2]).toEqual({ name: 'task-3', watched: false, existsInVmLog: true })
     })
 
     it('should set loading state during fetch', async () => {
-      loki.getTaskNames.mockImplementation(() => {
+      vmlog.getTaskNames.mockImplementation(() => {
         expect(store.loading).toBe(true)
         return Promise.resolve(['task-1'])
       })
@@ -70,7 +70,7 @@ describe('taskStore', () => {
 
     it('should handle fetch errors gracefully', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      loki.getTaskNames.mockRejectedValue(new Error('Network error'))
+      vmlog.getTaskNames.mockRejectedValue(new Error('Network error'))
 
       await store.fetchTasks()
 
@@ -81,24 +81,24 @@ describe('taskStore', () => {
       consoleError.mockRestore()
     })
 
-    it('should include watched tasks even if they are not in Loki', async () => {
-      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2'])
+    it('should include watched tasks even if they are not in VMLog', async () => {
+      vmlog.getTaskNames.mockResolvedValue(['task-1', 'task-2'])
 
-      // Pre-set watched tasks including one not in Loki
-      store.watchedTasks = new Set(['task-2', 'task-not-in-loki'])
+      // Pre-set watched tasks including one not in VMLog
+      store.watchedTasks = new Set(['task-2', 'task-not-in-vmlog'])
 
       await store.fetchTasks()
 
       expect(store.tasks).toHaveLength(3)
-      expect(store.tasks).toContainEqual({ name: 'task-1', watched: false, existsInLoki: true })
-      expect(store.tasks).toContainEqual({ name: 'task-2', watched: true, existsInLoki: true })
-      expect(store.tasks).toContainEqual({ name: 'task-not-in-loki', watched: true, existsInLoki: false })
+      expect(store.tasks).toContainEqual({ name: 'task-1', watched: false, existsInVmLog: true })
+      expect(store.tasks).toContainEqual({ name: 'task-2', watched: true, existsInVmLog: true })
+      expect(store.tasks).toContainEqual({ name: 'task-not-in-vmlog', watched: true, existsInVmLog: false })
     })
   })
 
   describe('toggleWatched()', () => {
     beforeEach(async () => {
-      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
+      vmlog.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
       await store.fetchTasks()
     })
 
@@ -135,7 +135,7 @@ describe('taskStore', () => {
 
   describe('sortedTasks', () => {
     beforeEach(async () => {
-      loki.getTaskNames.mockResolvedValue(['zebra', 'alpha', 'beta', 'gamma'])
+      vmlog.getTaskNames.mockResolvedValue(['zebra', 'alpha', 'beta', 'gamma'])
       await store.fetchTasks()
     })
 
@@ -173,7 +173,7 @@ describe('taskStore', () => {
       expect(initialSorted).toHaveLength(4)
 
       // Add new task
-      loki.getTaskNames.mockResolvedValue(['zebra', 'alpha', 'beta', 'gamma', 'new-task'])
+      vmlog.getTaskNames.mockResolvedValue(['zebra', 'alpha', 'beta', 'gamma', 'new-task'])
       await store.fetchTasks()
 
       expect(store.sortedTasks).toHaveLength(5)
@@ -183,7 +183,7 @@ describe('taskStore', () => {
   describe('initialize()', () => {
     it('should load watched tasks and fetch tasks from API', async () => {
       localStorage.setItem('dashboard-watched-tasks-test-service', JSON.stringify(['task-2']))
-      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
+      vmlog.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
 
       await store.initialize()
 
@@ -199,7 +199,7 @@ describe('taskStore', () => {
       localStorage.setItem('dashboard-watched-tasks-other-service', JSON.stringify(['task-2', 'task-3']))
 
       // Mock API response
-      loki.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
+      vmlog.getTaskNames.mockResolvedValue(['task-1', 'task-2', 'task-3'])
 
       // Initialize (should only load test-service's tasks)
       await store.initialize()

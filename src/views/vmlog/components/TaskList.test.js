@@ -15,11 +15,11 @@ vi.mock('element-plus', () => ({
 
 // Mock icons
 vi.mock('@element-plus/icons-vue', () => ({
-  Search: { name: 'Search' },
-  Refresh: { name: 'Refresh' },
-  CircleClose: { name: 'CircleClose' },
-  FullScreen: { name: 'FullScreen' },
-  Close: { name: 'Close' }
+  Search: { name: 'Search', render: () => null },
+  Refresh: { name: 'Refresh', render: () => null },
+  CircleClose: { name: 'CircleClose', render: () => null },
+  FullScreen: { name: 'FullScreen', render: () => null },
+  Close: { name: 'Close', render: () => null }
 }))
 
 describe('TaskList.vue', () => {
@@ -34,7 +34,7 @@ describe('TaskList.vue', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div>Home</div>' } },
-        { path: '/batch-sync/:taskName', component: { template: '<div>Task</div>' } }
+        { path: '/logs/batch-sync/:taskName', component: { template: '<div>Task</div>' } }
       ]
     })
   })
@@ -57,8 +57,8 @@ describe('TaskList.vue', () => {
   it('should render task list correctly', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true },
-      { name: 'task-2', watched: false, existsInLoki: true }
+      { name: 'task-1', watched: true, existsInVmLog: true },
+      { name: 'task-2', watched: false, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -72,9 +72,9 @@ describe('TaskList.vue', () => {
   it('should display total task count in footer', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true },
-      { name: 'task-2', watched: false, existsInLoki: true },
-      { name: 'task-3', watched: true, existsInLoki: true }
+      { name: 'task-1', watched: true, existsInVmLog: true },
+      { name: 'task-2', watched: false, existsInVmLog: true },
+      { name: 'task-3', watched: true, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -86,9 +86,9 @@ describe('TaskList.vue', () => {
   it('should filter tasks based on search query', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'batch-sync-task', watched: true, existsInLoki: true },
-      { name: 'data-service-task', watched: false, existsInLoki: true },
-      { name: 'batch-upload-task', watched: true, existsInLoki: true }
+      { name: 'batch-sync-task', watched: true, existsInVmLog: true },
+      { name: 'data-service-task', watched: false, existsInVmLog: true },
+      { name: 'batch-upload-task', watched: true, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -109,7 +109,7 @@ describe('TaskList.vue', () => {
   it('should show "no tasks" message when filtered list is empty', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true }
+      { name: 'task-1', watched: true, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -124,11 +124,11 @@ describe('TaskList.vue', () => {
   it('should highlight selected task', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true },
+      { name: 'task-1', watched: true, existsInVmLog: true },
       { name: 'task-2', watched: false }
     ]
 
-    await router.push('/batch-sync/task-1')
+    await router.push('/logs/batch-sync/task-1')
     const wrapper = createWrapper()
 
     const taskItems = wrapper.findAll('.task-item')
@@ -139,7 +139,7 @@ describe('TaskList.vue', () => {
   it('should apply unwatched style to unwatched tasks', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true },
+      { name: 'task-1', watched: true, existsInVmLog: true },
       { name: 'task-2', watched: false }
     ]
 
@@ -153,7 +153,7 @@ describe('TaskList.vue', () => {
   it('should show watched icon for watched tasks', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true },
+      { name: 'task-1', watched: true, existsInVmLog: true },
       { name: 'task-2', watched: false }
     ]
 
@@ -169,7 +169,7 @@ describe('TaskList.vue', () => {
   it('should navigate to task on click', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'my-task', watched: true, existsInLoki: true }
+      { name: 'my-task', watched: true, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -183,7 +183,7 @@ describe('TaskList.vue', () => {
   it('should show context menu on right-click', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false, existsInLoki: true }
+      { name: 'task-1', watched: false, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -204,7 +204,7 @@ describe('TaskList.vue', () => {
   it('should close context menu on overlay click', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false, existsInLoki: true }
+      { name: 'task-1', watched: false, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -224,7 +224,7 @@ describe('TaskList.vue', () => {
   it('should toggle watched status via context menu', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false, existsInLoki: true }
+      { name: 'task-1', watched: false, existsInVmLog: true }
     ]
     const toggleSpy = vi.spyOn(store, 'toggleWatched')
 
@@ -246,7 +246,7 @@ describe('TaskList.vue', () => {
   it('should show "设为关注" for unwatched tasks in context menu', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false, existsInLoki: true }
+      { name: 'task-1', watched: false, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -262,7 +262,7 @@ describe('TaskList.vue', () => {
   it('should show "取消关注" for watched tasks in context menu', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: true, existsInLoki: true }
+      { name: 'task-1', watched: true, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -278,7 +278,7 @@ describe('TaskList.vue', () => {
   it('should close context menu on Escape key', async () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-1', watched: false, existsInLoki: true }
+      { name: 'task-1', watched: false, existsInVmLog: true }
     ]
 
     const wrapper = createWrapper()
@@ -309,16 +309,16 @@ describe('TaskList.vue', () => {
     expect(store.loading).toBe(true)
   })
 
-  it('should show "无日志" badge for tasks not in Loki', () => {
+  it('should show "无日志" badge for tasks not in VMLog', () => {
     const store = useTaskStore()
     store.tasks = [
-      { name: 'task-in-loki', watched: true, existsInLoki: true },
-      { name: 'task-not-in-loki', watched: true, existsInLoki: false }
+      { name: 'task-in-vmlog', watched: true, existsInVmLog: true },
+      { name: 'task-not-in-vmlog', watched: true, existsInVmLog: false }
     ]
 
     const wrapper = createWrapper()
 
-    const badges = wrapper.findAll('.not-in-loki-badge')
+    const badges = wrapper.findAll('.not-in-vmlog-badge')
     expect(badges).toHaveLength(1)
     expect(badges[0].text()).toBe('无日志')
   })

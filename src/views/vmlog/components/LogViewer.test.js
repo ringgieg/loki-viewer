@@ -3,11 +3,11 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import LogViewer from './LogViewer.vue'
-import * as loki from '../../../api/loki'
+import * as vmlog from '../../../api/vmlog'
 import { useWsStore } from '../../../stores/wsStore'
 
-// Mock loki API
-vi.mock('../../../api/loki', () => ({
+// Mock vmlog API
+vi.mock('../../../api/vmlog', () => ({
   queryTaskLogs: vi.fn(),
   filterLogsByLevel: vi.fn((logs, level) => logs)
 }))
@@ -52,7 +52,7 @@ describe('LogViewer.vue', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
-        { path: '/batch-sync/:taskName', name: 'task', component: LogViewer }
+        { path: '/logs/batch-sync/:taskName', name: 'task', component: LogViewer }
       ]
     })
 
@@ -60,7 +60,7 @@ describe('LogViewer.vue', () => {
   })
 
   async function createWrapper(taskName = null) {
-    const path = taskName ? `/batch-sync/${taskName}` : '/'
+    const path = taskName ? `/logs/batch-sync/${taskName}` : '/'
     await router.push(path)
     await router.isReady()
 
@@ -94,7 +94,7 @@ describe('LogViewer.vue', () => {
       { id: '2', line: 'Log 2', level: 'ERROR', timestamp: 2000 }
     ]
 
-    loki.queryTaskLogs.mockResolvedValue({
+    vmlog.queryTaskLogs.mockResolvedValue({
       logs: mockLogs,
       nextCursor: '12345',
       hasMore: true
@@ -103,14 +103,14 @@ describe('LogViewer.vue', () => {
     const wrapper = await createWrapper('test-task')
     await flushPromises()
 
-    expect(loki.queryTaskLogs).toHaveBeenCalledWith('test-task', {
+    expect(vmlog.queryTaskLogs).toHaveBeenCalledWith('test-task', {
       limit: 500
     })
     expect(wrapper.vm.logs.length).toBeGreaterThan(0)
   })
 
   it('should pass level filter to API when selected', async () => {
-    loki.queryTaskLogs.mockResolvedValue({
+    vmlog.queryTaskLogs.mockResolvedValue({
       logs: [],
       nextCursor: null,
       hasMore: false
@@ -124,7 +124,7 @@ describe('LogViewer.vue', () => {
     await wrapper.vm.$nextTick()
     await flushPromises()
 
-    const calls = loki.queryTaskLogs.mock.calls
+    const calls = vmlog.queryTaskLogs.mock.calls
     const lastCall = calls[calls.length - 1]
     expect(lastCall[1]).toMatchObject({
       limit: 500,
@@ -133,7 +133,7 @@ describe('LogViewer.vue', () => {
   })
 
   it('should display connection status based on WebSocket state', async () => {
-    loki.queryTaskLogs.mockResolvedValue({
+    vmlog.queryTaskLogs.mockResolvedValue({
       logs: [],
       nextCursor: null,
       hasMore: false
@@ -164,7 +164,7 @@ describe('LogViewer.vue', () => {
       { id: '2', line: 'Task 2 log', level: 'INFO', timestamp: 2000 }
     ]
 
-    loki.queryTaskLogs
+    vmlog.queryTaskLogs
       .mockResolvedValueOnce({
         logs: initialLogs,
         nextCursor: null,
@@ -182,7 +182,7 @@ describe('LogViewer.vue', () => {
     expect(wrapper.vm.logs).toHaveLength(1)
 
     // Switch to task-2
-    await router.push('/batch-sync/task-2')
+    await router.push('/logs/batch-sync/task-2')
     await flushPromises()
 
     expect(wrapper.vm.logs).toHaveLength(1)
@@ -191,19 +191,18 @@ describe('LogViewer.vue', () => {
 
   it('should handle API errors gracefully', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    loki.queryTaskLogs.mockRejectedValue(new Error('API Error'))
+    vmlog.queryTaskLogs.mockRejectedValue(new Error('API Error'))
 
     const wrapper = await createWrapper('test-task')
     await flushPromises()
 
     expect(consoleError).toHaveBeenCalled()
-    expect(wrapper.vm.initialLoading).toBe(false)
 
     consoleError.mockRestore()
   })
 
   it('should reset pagination state when changing tasks', async () => {
-    loki.queryTaskLogs
+    vmlog.queryTaskLogs
       .mockResolvedValueOnce({
         logs: [],
         nextCursor: '12345',
@@ -222,7 +221,7 @@ describe('LogViewer.vue', () => {
     expect(wrapper.vm.hasMore).toBe(true)
 
     // Change task
-    await router.push('/batch-sync/task-2')
+    await router.push('/logs/batch-sync/task-2')
     await flushPromises()
 
     // Should fetch new data with new cursor

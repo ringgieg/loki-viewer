@@ -9,8 +9,16 @@ import time
 import sys
 from datetime import datetime
 
-DEFAULT_LOKI_URL = "http://localhost:3100"
+DEFAULT_VMLOG_URL = "http://127.0.0.1:9428"
+DEFAULT_PUSH_PATH = "/insert/loki/api/v1/push"
 TASK_NAME = "test_alert"
+
+
+def _session_no_proxy():
+    """Create a requests session that ignores system proxy env vars."""
+    s = requests.Session()
+    s.trust_env = False
+    return s
 
 
 def print_step(step_num, message):
@@ -20,24 +28,23 @@ def print_step(step_num, message):
     print(f"{'='*60}")
 
 
-def check_loki_connection(loki_url):
-    """Check if Loki is accessible"""
+def check_vmlog_connection(vmlog_url):
+    """Check if VictoriaLogs (vmlog) is accessible."""
     try:
-        response = requests.get(f"{loki_url}/ready", timeout=3)
+        response = _session_no_proxy().get(f"{vmlog_url.rstrip('/')}/metrics", timeout=3)
         if response.status_code == 200:
-            print(f"[OK] Loki is running at {loki_url}")
+            print(f"[OK] vmlog is running at {vmlog_url}")
             return True
         else:
-            print(f"[FAIL] Loki responded with status {response.status_code}")
+            print(f"[FAIL] vmlog responded with status {response.status_code}")
             return False
     except Exception as e:
-        print(f"[FAIL] Cannot connect to Loki: {e}")
-        print(f"      Make sure Loki is running: docker ps | grep loki")
+        print(f"[FAIL] Cannot connect to vmlog: {e}")
         return False
 
 
-def send_test_log(loki_url):
-    """Send a test ERROR log"""
+def send_test_log(vmlog_url, push_path=DEFAULT_PUSH_PATH):
+    """Send a test ERROR log to vmlog."""
     timestamp_ns = int(time.time() * 1_000_000_000)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -65,8 +72,12 @@ def send_test_log(loki_url):
     }
 
     try:
-        response = requests.post(
-            f"{loki_url}/loki/api/v1/push",
+        base = vmlog_url.rstrip("/")
+        path = push_path if push_path.startswith("/") else f"/{push_path}"
+        push_url = f"{base}{path}"
+
+        response = _session_no_proxy().post(
+            push_url,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=5
@@ -86,22 +97,32 @@ def send_test_log(loki_url):
         return False
 
 
-def check_task_exists(loki_url):
-    """Check if the test task exists in Loki"""
+def check_task_exists(vmlog_url):
+    """Check if the test task exists in vmlog via LogsQL stream_field_values."""
     try:
-        response = requests.get(
-            f"{loki_url}/loki/api/v1/label/task_name/values",
-            timeout=5
+        body = {
+            "query": "{job=\"tasks\",service=\"Batch-Sync\"}",
+            "field": "task_name",
+            "start": "30d",
+            "end": "now",
+            "limit": "2000",
+        }
+
+        response = _session_no_proxy().post(
+            f"{vmlog_url.rstrip('/')}/select/logsql/stream_field_values",
+            data=body,
+            timeout=5,
         )
         if response.status_code == 200:
             data = response.json()
-            tasks = data.get('data', [])
+            tasks = [v.get("value") for v in data.get("values", [])]
             if TASK_NAME in tasks:
-                print(f"[OK] Task '{TASK_NAME}' exists in Loki")
+                print(f"[OK] Task '{TASK_NAME}' exists in vmlog")
                 return True
             else:
                 print(f"[INFO] Task '{TASK_NAME}' not found yet")
-                print(f"       Available tasks: {', '.join(tasks[:5])}")
+                if tasks:
+                    print(f"       Available tasks (first 5): {', '.join(tasks[:5])}")
                 return False
         else:
             print(f"[FAIL] Cannot fetch tasks: HTTP {response.status_code}")
@@ -112,24 +133,26 @@ def check_task_exists(loki_url):
 
 
 def main():
-    loki_url = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_LOKI_URL
+    vmlog_url = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_VMLOG_URL
+    push_path = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PUSH_PATH
 
     print("\n" + "="*60)
     print("Alert Overlay Debug Tool")
     print("="*60)
-    print(f"Loki URL: {loki_url}")
+    print(f"vmlog URL: {vmlog_url}")
+    print(f"Push Path: {push_path}")
     print(f"Test Task: {TASK_NAME}")
     print("="*60)
 
     # Step 1: Check Loki connection
-    print_step(1, "Check Loki Connection")
-    if not check_loki_connection(loki_url):
-        print("\n[ERROR] Cannot proceed without Loki connection")
+    print_step(1, "Check vmlog Connection")
+    if not check_vmlog_connection(vmlog_url):
+        print("\n[ERROR] Cannot proceed without vmlog connection")
         sys.exit(1)
 
     # Step 2: Send test log
     print_step(2, "Send Test ERROR Log")
-    if not send_test_log(loki_url):
+    if not send_test_log(vmlog_url, push_path=push_path):
         print("\n[ERROR] Failed to send test log")
         sys.exit(1)
 
@@ -137,8 +160,8 @@ def main():
     time.sleep(1)
 
     # Step 3: Verify task exists
-    print_step(3, "Verify Task in Loki")
-    check_task_exists(loki_url)
+    print_step(3, "Verify Task in vmlog")
+    check_task_exists(vmlog_url)
 
     # Step 4: Instructions
     print_step(4, "Configure Monitoring in Browser")
@@ -166,7 +189,7 @@ def main():
     input()
 
     print("\nSending ERROR log to trigger alert...")
-    if send_test_log(loki_url):
+    if send_test_log(vmlog_url, push_path=push_path):
         print()
         print("="*60)
         print("SUCCESS!")

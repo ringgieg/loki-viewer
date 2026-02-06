@@ -1,10 +1,10 @@
 <template>
-  <div class="prometheus-multitask-mode">
+  <div class="vmalert-multitask-mode">
     <aside class="mode-sidebar">
-      <PrometheusTaskList :kiosk-mode="kioskMode" />
+      <VmalertTaskList :kiosk-mode="kioskMode" />
     </aside>
     <main class="mode-content">
-      <PrometheusMonitor />
+      <VmalertMonitor />
     </main>
   </div>
 </template>
@@ -12,20 +12,20 @@
 <script setup>
 import { onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { usePrometheusStore } from '../../stores/prometheusStore'
+import { useVmalertStore } from '../../stores/vmalertStore'
 import { useServiceStore } from '../../stores/serviceStore'
-import PrometheusTaskList from './components/PrometheusTaskList.vue'
-import PrometheusMonitor from './components/PrometheusMonitor.vue'
+import VmalertTaskList from './components/VmalertTaskList.vue'
+import VmalertMonitor from './components/VmalertMonitor.vue'
 
 const route = useRoute()
-const prometheusStore = usePrometheusStore()
+const vmalertStore = useVmalertStore()
 const serviceStore = useServiceStore()
 
 // Check if kiosk mode is enabled via URL parameter
 const kioskMode = computed(() => route.query.kiosk === '1')
 
 onMounted(async () => {
-  console.log('[PrometheusMultitaskMode] Initializing for service:', route.params.serviceId)
+  console.log('[VMAlertMultitaskMode] Initializing for service:', route.params.serviceId)
 
   // CRITICAL: Set current service BEFORE initializing stores
   // This ensures stores use the correct serviceId for localStorage keys
@@ -34,24 +34,24 @@ onMounted(async () => {
     serviceStore.setCurrentService(serviceId)
   }
 
-  // Initialize prometheus store
-  await prometheusStore.initialize()
+  // Initialize vmalert store
+  await vmalertStore.initialize()
 
-  console.log('[PrometheusMultitaskMode] Initialized')
+  console.log('[VMAlertMultitaskMode] Initialized')
 })
 
 onUnmounted(() => {
-  console.log('[PrometheusMultitaskMode] Cleaning up...')
+  console.log('[VMAlertMultitaskMode] Cleaning up...')
 
   // Cleanup: stop polling
-  prometheusStore.cleanup()
+  vmalertStore.cleanup()
 
-  console.log('[PrometheusMultitaskMode] Cleaned up')
+  console.log('[VMAlertMultitaskMode] Cleaned up')
 })
 </script>
 
 <style scoped>
-.prometheus-multitask-mode {
+.vmalert-multitask-mode {
   display: flex;
   height: 100%;
   width: 100%;

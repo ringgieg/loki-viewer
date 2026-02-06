@@ -7,12 +7,12 @@ import {
   buildTaskQuery,
   queryTaskLogs,
   filterLogsByLevel
-} from './loki.js'
+} from './vmlog.js'
 
 // Mock axios
 vi.mock('axios')
 
-describe('loki.js', () => {
+describe('vmlog.js', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Set default config for tests (multi-service format)
@@ -22,7 +22,7 @@ describe('loki.js', () => {
         {
           id: 'batch-sync',
           displayName: 'Batch-Sync Service',
-          loki: {
+          vmlog: {
             fixedLabels: {
               job: 'tasks',
               service: 'Batch-Sync'
@@ -31,8 +31,8 @@ describe('loki.js', () => {
           }
         }
       ],
-      loki: {
-        apiBasePath: '/loki/api/v1'
+      vmlog: {
+        apiBasePath: '/select/logsql'
       }
     }
   })
@@ -44,31 +44,34 @@ describe('loki.js', () => {
   describe('queryLogsWithCursor()', () => {
     it('should query logs with default parameters', async () => {
       const mockResponse = {
-        data: {
-          data: {
-            result: [
-              {
-                stream: { service: 'batch-sync', task_name: 'test-task', level: 'INFO' },
-                values: [
-                  ['1234567890000000000', 'Test log message']
-                ]
-              }
-            ]
-          }
-        }
+        data: [
+          JSON.stringify({
+            _time: '2026-02-06T00:00:00Z',
+            _msg: 'Test log message',
+            service: 'batch-sync',
+            task_name: 'test-task',
+            level: 'INFO'
+          })
+        ].join('\n') + '\n'
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
       const result = await queryLogsWithCursor('{service="batch-sync"}')
 
-      expect(axios.get).toHaveBeenCalledWith('/loki/api/v1/query_range', {
-        params: expect.objectContaining({
-          query: '{service="batch-sync"}',
-          limit: 500,
-          direction: 'backward'
+      expect(axios.post).toHaveBeenCalledWith(
+        '/select/logsql/query',
+        expect.any(URLSearchParams),
+        expect.objectContaining({
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          responseType: 'text'
         })
-      })
+      )
+
+      const body = axios.post.mock.calls[0][1]
+      expect(body.get('query')).toBe('{service="batch-sync"}')
+      expect(body.get('limit')).toBe('500')
+      expect(body.get('offset')).toBe('0')
 
       expect(result.logs).toHaveLength(1)
       expect(result.logs[0]).toMatchObject({
@@ -79,55 +82,30 @@ describe('loki.js', () => {
       })
     })
 
-    it('should handle cursor-based pagination backward', async () => {
-      const mockResponse = {
-        data: {
-          data: {
-            result: []
-          }
-        }
-      }
+    it('should handle cursor-based pagination via offset', async () => {
+      const mockResponse = { data: '' }
+      axios.post.mockResolvedValue(mockResponse)
 
-      axios.get.mockResolvedValue(mockResponse)
+      await queryLogsWithCursor('{service="batch-sync"}', { cursor: '500' })
 
-      await queryLogsWithCursor('{service="batch-sync"}', {
-        cursor: '1234567890000000000',
-        direction: 'backward'
-      })
-
-      expect(axios.get).toHaveBeenCalledWith('/loki/api/v1/query_range', {
-        params: expect.objectContaining({
-          end: '1234567890000000000',
-          direction: 'backward'
-        })
-      })
+      const body = axios.post.mock.calls[0][1]
+      expect(body.get('offset')).toBe('500')
     })
 
     it('should return nextCursor and hasMore flag', async () => {
       const mockResponse = {
-        data: {
-          data: {
-            result: [
-              {
-                stream: { service: 'batch-sync' },
-                values: [
-                  ['2000000000000', 'Log 1'],
-                  ['1000000000000', 'Log 2']
-                ]
-              }
-            ]
-          }
-        }
+        data: [
+          JSON.stringify({ _time: '2026-02-06T00:00:02Z', _msg: 'Log 1', task_name: 't', service: 'batch-sync', level: 'INFO' }),
+          JSON.stringify({ _time: '2026-02-06T00:00:01Z', _msg: 'Log 2', task_name: 't', service: 'batch-sync', level: 'INFO' })
+        ].join('\n') + '\n'
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
       const result = await queryLogsWithCursor('{service="batch-sync"}', { limit: 2 })
 
       expect(result.hasMore).toBe(true)
-      // After backward sorting: logs[0].timestampNano=2000000000000, logs[1].timestampNano=1000000000000
-      // lastLog = logs[1], nextCursor = 1000000000000 - 1
-      expect(result.nextCursor).toBe('999999999999')
+      expect(result.nextCursor).toBe('2')
     })
 
     it('should retry on 429 Too Many Requests', async () => {
@@ -136,25 +114,16 @@ describe('loki.js', () => {
       }
 
       const successResponse = {
-        data: {
-          data: {
-            result: [
-              {
-                stream: { service: 'batch-sync' },
-                values: [['1234567890000000000', 'Success after retry']]
-              }
-            ]
-          }
-        }
+        data: JSON.stringify({ _time: '2026-02-06T00:00:00Z', _msg: 'Success after retry', service: 'batch-sync', task_name: 't' }) + '\n'
       }
 
-      axios.get
+      axios.post
         .mockRejectedValueOnce(errorResponse)
         .mockResolvedValueOnce(successResponse)
 
       const result = await queryLogsWithCursor('{service="batch-sync"}')
 
-      expect(axios.get).toHaveBeenCalledTimes(2)
+      expect(axios.post).toHaveBeenCalledTimes(2)
       expect(result.logs).toHaveLength(1)
     })
 
@@ -163,13 +132,13 @@ describe('loki.js', () => {
         response: { status: 429 }
       }
 
-      axios.get.mockRejectedValue(errorResponse)
+      axios.post.mockRejectedValue(errorResponse)
 
       await expect(
         queryLogsWithCursor('{service="batch-sync"}')
       ).rejects.toMatchObject({ response: { status: 429 } })
 
-      expect(axios.get).toHaveBeenCalledTimes(3) // max retries = 3
+      expect(axios.post).toHaveBeenCalledTimes(3) // max retries = 3
     })
   })
 
@@ -177,26 +146,36 @@ describe('loki.js', () => {
     it('should fetch label values from API', async () => {
       const mockResponse = {
         data: {
-          data: ['task-1', 'task-2', 'task-3']
+          values: [
+            { value: 'task-1', hits: 10 },
+            { value: 'task-2', hits: 5 },
+            { value: 'task-3', hits: 1 }
+          ]
         }
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
       const result = await getLabelValues('task_name')
 
-      expect(axios.get).toHaveBeenCalledWith('/loki/api/v1/label/task_name/values')
+      expect(axios.post).toHaveBeenCalledWith(
+        '/select/logsql/stream_field_values',
+        expect.any(URLSearchParams),
+        expect.objectContaining({
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        })
+      )
       expect(result).toEqual(['task-1', 'task-2', 'task-3'])
     })
 
     it('should handle empty label values', async () => {
       const mockResponse = {
         data: {
-          data: []
+          values: []
         }
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
       const result = await getLabelValues('nonexistent')
 
@@ -204,7 +183,7 @@ describe('loki.js', () => {
     })
 
     it('should throw error on API failure', async () => {
-      axios.get.mockRejectedValue(new Error('Network error'))
+      axios.post.mockRejectedValue(new Error('Network error'))
 
       await expect(getLabelValues('task_name')).rejects.toThrow('Network error')
     })
@@ -214,32 +193,33 @@ describe('loki.js', () => {
     it('should fetch task names using getLabelValues', async () => {
       const mockResponse = {
         data: {
-          data: ['task-a', 'task-b']
+          values: [{ value: 'task-a' }, { value: 'task-b' }]
         }
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
       const result = await getTaskNames()
 
-      expect(axios.get).toHaveBeenCalledWith('/loki/api/v1/label/task_name/values')
+      expect(axios.post).toHaveBeenCalled()
       expect(result).toEqual(['task-a', 'task-b'])
     })
 
     it('should use custom task label from config', async () => {
-      window.APP_CONFIG.services[0].loki.taskLabel = 'job_name'
+      window.APP_CONFIG.services[0].vmlog.taskLabel = 'job_name'
 
       const mockResponse = {
         data: {
-          data: ['job-a', 'job-b']
+          values: [{ value: 'job-a' }, { value: 'job-b' }]
         }
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
       const result = await getTaskNames()
 
-      expect(axios.get).toHaveBeenCalledWith('/loki/api/v1/label/job_name/values')
+      const body = axios.post.mock.calls[0][1]
+      expect(body.get('field')).toBe('job_name')
       expect(result).toEqual(['job-a', 'job-b'])
     })
   })
@@ -257,38 +237,6 @@ describe('loki.js', () => {
       expect(query).toBe('{job="tasks", service="Batch-Sync", task_name="my-task"}')
     })
 
-    it('should add ERROR level filter', () => {
-      const query = buildTaskQuery('my-task', {
-        level: 'ERROR'
-      })
-
-      expect(query).toContain('| level=~"ERROR"')
-    })
-
-    it('should add WARN level filter (includes ERROR and WARN)', () => {
-      const query = buildTaskQuery('my-task', {
-        level: 'WARN'
-      })
-
-      expect(query).toContain('| level=~"ERROR|WARN"')
-    })
-
-    it('should add INFO level filter (includes ERROR, WARN, INFO)', () => {
-      const query = buildTaskQuery('my-task', {
-        level: 'INFO'
-      })
-
-      expect(query).toContain('| level=~"ERROR|WARN|INFO"')
-    })
-
-    it('should add DEBUG level filter (includes all levels)', () => {
-      const query = buildTaskQuery('my-task', {
-        level: 'DEBUG'
-      })
-
-      expect(query).toContain('| level=~"ERROR|WARN|INFO|DEBUG"')
-    })
-
     it('should use fixed labels from config', () => {
       const query = buildTaskQuery('my-task')
 
@@ -297,11 +245,11 @@ describe('loki.js', () => {
     })
 
     it('should use custom fixed labels from config', () => {
-      window.APP_CONFIG.services[0].loki.fixedLabels = {
+      window.APP_CONFIG.services[0].vmlog.fixedLabels = {
         env: 'production',
         app: 'MyApp'
       }
-      window.APP_CONFIG.services[0].loki.taskLabel = 'job_name'
+      window.APP_CONFIG.services[0].vmlog.taskLabel = 'job_name'
 
       const query = buildTaskQuery('my-task')
 
@@ -309,10 +257,10 @@ describe('loki.js', () => {
     })
 
     it('should work with minimal fixed labels', () => {
-      window.APP_CONFIG.services[0].loki.fixedLabels = {
+      window.APP_CONFIG.services[0].vmlog.fixedLabels = {
         service: 'Batch-Sync'
       }
-      window.APP_CONFIG.services[0].loki.taskLabel = 'task_name'
+      window.APP_CONFIG.services[0].vmlog.taskLabel = 'task_name'
 
       const query = buildTaskQuery('my-task')
 
@@ -320,13 +268,13 @@ describe('loki.js', () => {
     })
 
     it('should support multiple fixed labels', () => {
-      window.APP_CONFIG.services[0].loki.fixedLabels = {
+      window.APP_CONFIG.services[0].vmlog.fixedLabels = {
         job: 'tasks',
         env: 'production',
         region: 'us-east-1',
         service: 'Batch-Sync'
       }
-      window.APP_CONFIG.services[0].loki.taskLabel = 'task_name'
+      window.APP_CONFIG.services[0].vmlog.taskLabel = 'task_name'
 
       const query = buildTaskQuery(null)
 
@@ -337,27 +285,28 @@ describe('loki.js', () => {
   describe('queryTaskLogs()', () => {
     it('should build query and call queryLogsWithCursor', async () => {
       const mockResponse = {
-        data: {
-          data: {
-            result: []
-          }
-        }
+        data: [
+          JSON.stringify({ _time: '2026-02-06T00:00:00Z', _msg: 'error', level: 'ERROR', task_name: 'my-task', service: 'Batch-Sync' }),
+          JSON.stringify({ _time: '2026-02-06T00:00:00Z', _msg: 'warn', level: 'WARN', task_name: 'my-task', service: 'Batch-Sync' })
+        ].join('\n') + '\n'
       }
 
-      axios.get.mockResolvedValue(mockResponse)
+      axios.post.mockResolvedValue(mockResponse)
 
-      await queryTaskLogs('my-task', {
-        service: 'Batch-Sync',
-        level: 'ERROR',
-        limit: 100
-      })
+      const result = await queryTaskLogs('my-task', { level: 'ERROR', limit: 100 })
 
-      expect(axios.get).toHaveBeenCalledWith('/loki/api/v1/query_range', {
-        params: expect.objectContaining({
-          query: '{job="tasks", service="Batch-Sync", task_name="my-task"} | level=~"ERROR"',
-          limit: 100
-        })
-      })
+      expect(axios.post).toHaveBeenCalledWith(
+        '/select/logsql/query',
+        expect.any(URLSearchParams),
+        expect.objectContaining({ responseType: 'text' })
+      )
+      const body = axios.post.mock.calls[0][1]
+      expect(body.get('query')).toBe('{job="tasks", service="Batch-Sync", task_name="my-task"}')
+      expect(body.get('limit')).toBe('100')
+
+      // client-side level filtering
+      expect(result.logs).toHaveLength(1)
+      expect(result.logs[0].level).toBe('ERROR')
     })
   })
 

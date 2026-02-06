@@ -14,8 +14,8 @@ vi.mock('element-plus', () => ({
 }))
 
 vi.mock('@element-plus/icons-vue', () => ({
-  Clock: { name: 'Clock' },
-  MuteNotification: { name: 'MuteNotification' }
+  Clock: { name: 'Clock', render: () => null },
+  MuteNotification: { name: 'MuteNotification', render: () => null }
 }))
 
 vi.mock('../api/alertmanager', () => ({

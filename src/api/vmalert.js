@@ -1,16 +1,16 @@
 import axios from 'axios'
 import {
-  getPrometheusApiBasePath,
-  getPrometheusMaxRetries,
-  getPrometheusRetryBaseDelay
+  getVmalertApiBasePath,
+  getVmalertMaxRetries,
+  getVmalertRetryBaseDelay
 } from '../utils/config'
 
 /**
  * Retry wrapper with fixed delay
  */
 async function retryWithBackoff(fn, maxRetries = null, baseDelay = null) {
-  const finalMaxRetries = maxRetries ?? getPrometheusMaxRetries()
-  const finalBaseDelay = baseDelay ?? getPrometheusRetryBaseDelay()
+  const finalMaxRetries = maxRetries ?? getVmalertMaxRetries()
+  const finalBaseDelay = baseDelay ?? getVmalertRetryBaseDelay()
 
   for (let i = 0; i < finalMaxRetries; i++) {
     try {
@@ -21,7 +21,7 @@ async function retryWithBackoff(fn, maxRetries = null, baseDelay = null) {
 
       if ((isTooManyRequests || isServerError) && i < finalMaxRetries - 1) {
         const delay = finalBaseDelay
-        console.log(`[Prometheus] Request failed, retrying in ${delay}ms...`)
+        console.log(`[VMAlert] Request failed, retrying in ${delay}ms...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       } else {
         throw error
@@ -36,7 +36,7 @@ async function retryWithBackoff(fn, maxRetries = null, baseDelay = null) {
  * @returns {Promise<Array>} Array of alert objects with rule metadata and metric labels
  */
 export async function getAlerts() {
-  const apiBasePath = getPrometheusApiBasePath()
+  const apiBasePath = getVmalertApiBasePath()
 
   const requestFn = async () => {
     const response = await axios.get(`${apiBasePath}/alerts/all`)
@@ -56,15 +56,15 @@ export async function getAlerts() {
         }
       })
 
-      console.log(`[Prometheus] Fetched ${alerts.length} alerts from unified endpoint`)
+      console.log(`[VMAlert] Fetched ${alerts.length} alerts from unified endpoint`)
 
       return alerts
     } else {
-      console.error('[Prometheus] Invalid response format:', response.data)
+      console.error('[VMAlert] Invalid response format:', response.data)
       return []
     }
   } catch (error) {
-    console.error('[Prometheus] Failed to fetch alerts:', error)
+    console.error('[VMAlert] Failed to fetch alerts:', error)
     throw error
   }
 }
@@ -76,7 +76,7 @@ export async function getAlerts() {
  * @returns {Promise<Array<string>>} Array of label values
  */
 export async function getLabelValues(labelName, matchers = {}) {
-  const apiBasePath = getPrometheusApiBasePath()
+  const apiBasePath = getVmalertApiBasePath()
 
   const requestFn = async () => {
     const params = {}
@@ -102,23 +102,23 @@ export async function getLabelValues(labelName, matchers = {}) {
     if (response.data?.status === 'success') {
       return response.data.data || []
     } else {
-      console.error('[Prometheus] Invalid response format:', response.data)
+      console.error('[VMAlert] Invalid response format:', response.data)
       return []
     }
   } catch (error) {
-    console.error(`[Prometheus] Failed to fetch label values for ${labelName}:`, error)
+    console.error(`[VMAlert] Failed to fetch label values for ${labelName}:`, error)
     throw error
   }
 }
 
 /**
- * Query Prometheus for instant vector
+ * Query VMAlert for instant vector
  * @param {string} query - PromQL query
  * @param {number} time - Evaluation timestamp (optional)
  * @returns {Promise<Object>} Query result
  */
 export async function queryInstant(query, time = null) {
-  const apiBasePath = getPrometheusApiBasePath()
+  const apiBasePath = getVmalertApiBasePath()
 
   const requestFn = async () => {
     const params = { query }
@@ -136,11 +136,11 @@ export async function queryInstant(query, time = null) {
     if (response.data?.status === 'success') {
       return response.data.data
     } else {
-      console.error('[Prometheus] Invalid response format:', response.data)
+      console.error('[VMAlert] Invalid response format:', response.data)
       return null
     }
   } catch (error) {
-    console.error('[Prometheus] Failed to execute query:', error)
+    console.error('[VMAlert] Failed to execute query:', error)
     throw error
   }
 }

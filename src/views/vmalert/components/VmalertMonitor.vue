@@ -1,5 +1,5 @@
 <template>
-  <div class="prometheus-monitor-container">
+  <div class="vmalert-monitor-container">
     <!-- Header -->
     <div class="monitor-header">
       <div class="header-left">
@@ -356,8 +356,8 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Loading, Refresh } from '@element-plus/icons-vue'
-import { usePrometheusStore } from '../../../stores/prometheusStore'
-import { getAlertStateDisplayName } from '../../../api/prometheus'
+import { useVmalertStore } from '../../../stores/vmalertStore'
+import { getAlertStateDisplayName } from '../../../api/vmalert'
 import LinkifyIt from 'linkify-it'
 import AlertmanagerSilenceDropdown from '../../../components/AlertmanagerSilenceDropdown.vue'
 import {
@@ -376,7 +376,7 @@ import {
 } from '../../../utils/config'
 
 const route = useRoute()
-const prometheusStore = usePrometheusStore()
+const prometheusStore = useVmalertStore()
 const linkify = new LinkifyIt()
 
 const currentTask = computed(() => route.params.taskName || null)
@@ -968,7 +968,7 @@ watch(
 </script>
 
 <style scoped>
-.prometheus-monitor-container {
+.vmalert-monitor-container {
   display: flex;
   flex-direction: column;
   height: 100%;

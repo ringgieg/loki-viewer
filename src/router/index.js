@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getCurrentServiceId, getServiceType } from '../utils/config'
-import LokiMultitaskMode from '../views/loki/LokiMultitaskMode.vue'
-import PrometheusMultitaskMode from '../views/prometheus/PrometheusMultitaskMode.vue'
+import VmlogMultitaskMode from '../views/vmlog/VmlogMultitaskMode.vue'
+import VmalertMultitaskMode from '../views/vmalert/VmalertMultitaskMode.vue'
 
 const logsBasePath = '/logs'
-const prometheusBasePath = '/prometheus'
+const vmalertBasePath = '/vmalert'
 
 const routes = [
   {
@@ -13,37 +13,37 @@ const routes = [
       const serviceId = getCurrentServiceId()
       const serviceType = getServiceType(serviceId)
 
-      if (serviceType === 'prometheus-multitask') {
-        return `${prometheusBasePath}/${serviceId}`
+      if (serviceType === 'vmalert-multitask') {
+        return `${vmalertBasePath}/${serviceId}`
       } else {
         return `${logsBasePath}/${serviceId}`
       }
     }
   },
-  // Loki routes
+  // vmlog routes
   {
     path: `${logsBasePath}/:serviceId`,
     name: 'service-logs',
-    component: LokiMultitaskMode,
+    component: VmlogMultitaskMode,
     props: true
   },
   {
     path: `${logsBasePath}/:serviceId/:taskName`,
     name: 'service-task-logs',
-    component: LokiMultitaskMode,
+    component: VmlogMultitaskMode,
     props: true
   },
-  // Prometheus routes
+  // vmalert routes
   {
-    path: `${prometheusBasePath}/:serviceId`,
-    name: 'service-prometheus',
-    component: PrometheusMultitaskMode,
+    path: `${vmalertBasePath}/:serviceId`,
+    name: 'service-vmalert',
+    component: VmalertMultitaskMode,
     props: true
   },
   {
-    path: `${prometheusBasePath}/:serviceId/:taskName`,
-    name: 'service-task-prometheus',
-    component: PrometheusMultitaskMode,
+    path: `${vmalertBasePath}/:serviceId/:taskName`,
+    name: 'service-task-vmalert',
+    component: VmalertMultitaskMode,
     props: true
   }
 ]

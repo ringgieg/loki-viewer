@@ -6,12 +6,10 @@ export default defineConfig({
   server: {
     port: 8080,
     proxy: {
-      '/loki': {
-        target: 'http://localhost:3100',
+      '/select': {
+        target: 'http://localhost:9428',
         changeOrigin: true,
-        // Don't rewrite path - preserve /loki prefix
-        // /loki/api/v1/... → http://localhost:3100/loki/api/v1/...
-        ws: true  // Enable WebSocket proxying
+        ws: true // Enable WebSocket proxying
       }
     }
   },

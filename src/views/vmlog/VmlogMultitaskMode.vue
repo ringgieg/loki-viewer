@@ -1,5 +1,5 @@
 <template>
-  <div class="loki-multitask-mode">
+  <div class="vmlog-multitask-mode">
     <aside class="mode-sidebar">
       <TaskList :kiosk-mode="kioskMode" />
     </aside>
@@ -27,7 +27,7 @@ const serviceStore = useServiceStore()
 const kioskMode = computed(() => route.query.kiosk === '1')
 
 onMounted(async () => {
-  console.log('[LokiMultitaskMode] Initializing for service:', route.params.serviceId)
+  console.log('[VMLogMultitaskMode] Initializing for service:', route.params.serviceId)
 
   // CRITICAL: Set current service BEFORE initializing stores
   // This ensures stores use the correct serviceId for localStorage keys
@@ -40,21 +40,21 @@ onMounted(async () => {
   await taskStore.initialize()
   wsStore.connect()
 
-  console.log('[LokiMultitaskMode] Initialized')
+  console.log('[VMLogMultitaskMode] Initialized')
 })
 
 onUnmounted(() => {
-  console.log('[LokiMultitaskMode] Cleaning up...')
+  console.log('[VMLogMultitaskMode] Cleaning up...')
 
   // Cleanup: disconnect WebSocket
   wsStore.disconnect()
 
-  console.log('[LokiMultitaskMode] Cleaned up')
+  console.log('[VMLogMultitaskMode] Cleaned up')
 })
 </script>
 
 <style scoped>
-.loki-multitask-mode {
+.vmlog-multitask-mode {
   display: flex;
   height: 100%;
   width: 100%;

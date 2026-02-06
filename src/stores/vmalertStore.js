@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAlerts, filterAlerts, groupAlertsByLabel } from '../api/prometheus'
+import { getAlerts, filterAlerts, groupAlertsByLabel } from '../api/vmalert'
 import { getAlertmanagerAlerts, getAlertmanagerSilences } from '../api/alertmanager'
 import {
   getPrometheusTaskLabel,
@@ -24,9 +24,9 @@ import {
 import { useServiceStore } from './serviceStore'
 import { useAlertStore } from './alertStore'
 
-const STORAGE_KEY_PREFIX = 'dashboard-watched-prometheus-tasks'
+const STORAGE_KEY_PREFIX = 'dashboard-watched-vmalert-tasks'
 
-export const usePrometheusStore = defineStore('prometheus', () => {
+export const useVmalertStore = defineStore('vmalert', () => {
   // State
   const alerts = ref([])
   const alertmanagerAlerts = ref([])
@@ -151,7 +151,7 @@ export const usePrometheusStore = defineStore('prometheus', () => {
       tasks.value = Array.from(allTaskNames).map(name => ({
         name,
         watched: watchedTasks.value.has(name),
-        existsInPrometheus: taskNamesFromAlerts.has(name)
+        existsInVmalert: taskNamesFromAlerts.has(name)
       }))
 
       console.log(`[PrometheusStore] Updated ${tasks.value.length} tasks from ${alerts.value.length} alerts`)

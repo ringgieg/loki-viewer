@@ -10,8 +10,8 @@ const defaultConfig = {
     {
       id: 'batch-sync',
       displayName: 'Batch-Sync Service',
-      loki: {
-        apiBasePath: '/loki/api/v1',
+      vmlog: {
+        apiBasePath: '/select/logsql',
         api: {
           tailLimit: 100,
           tailDelayFor: '0',
@@ -42,8 +42,8 @@ const defaultConfig = {
     {
       id: 'data-service',
       displayName: 'Data Service',
-      loki: {
-        apiBasePath: '/loki/api/v1',
+      vmlog: {
+        apiBasePath: '/select/logsql',
         api: {
           tailLimit: 100,
           tailDelayFor: '0',
@@ -80,7 +80,7 @@ const defaultConfig = {
 
 /**
  * Get configuration value with fallback
- * @param {string} path - Dot-separated path (e.g., 'loki.websocket.reconnectDelay')
+ * @param {string} path - Dot-separated path (e.g., 'vmlog.websocket.reconnectDelay')
  * @param {*} fallback - Fallback value if path not found
  * @returns {*} Configuration value
  */
@@ -89,36 +89,76 @@ export function getConfig(path, fallback) {
 
   if (!path) return config
 
-  const keys = path.split('.')
-  let value = config
+  const direct = tryGetPath(config, path)
+  if (direct.found) return direct.value
 
-  for (const key of keys) {
-    if (value && typeof value === 'object' && key in value) {
-      value = value[key]
-    } else {
-      return fallback !== undefined ? fallback : getDefaultValue(path)
-    }
+  const aliasedPath = getAliasedPath(config, path)
+  if (aliasedPath) {
+    const aliased = tryGetPath(config, aliasedPath)
+    if (aliased.found) return aliased.value
   }
 
-  return value
+  return fallback !== undefined ? fallback : getDefaultValue(path)
 }
 
 /**
  * Get default value from default config
  */
 function getDefaultValue(path) {
-  const keys = path.split('.')
-  let value = defaultConfig
+  const direct = tryGetPath(defaultConfig, path)
+  if (direct.found) return direct.value
+
+  const aliasedPath = getAliasedPath(defaultConfig, path)
+  if (aliasedPath) {
+    const aliased = tryGetPath(defaultConfig, aliasedPath)
+    if (aliased.found) return aliased.value
+  }
+
+  return undefined
+}
+
+function tryGetPath(obj, path) {
+  if (!obj || !path) return { found: false, value: undefined }
+  const keys = String(path).split('.')
+  let value = obj
 
   for (const key of keys) {
     if (value && typeof value === 'object' && key in value) {
       value = value[key]
     } else {
-      return undefined
+      return { found: false, value: undefined }
     }
   }
 
-  return value
+  return { found: true, value }
+}
+
+function getAliasedPath(obj, path) {
+  if (!obj || !path) return null
+
+  const p = String(path)
+
+  // vmlog <-> loki
+  if (p.startsWith('vmlog.')) {
+    const legacy = `loki.${p.slice('vmlog.'.length)}`
+    if (hasConfigPath(obj, legacy)) return legacy
+  }
+  if (p.startsWith('loki.')) {
+    const current = `vmlog.${p.slice('loki.'.length)}`
+    if (hasConfigPath(obj, current)) return current
+  }
+
+  // vmalert <-> prometheus
+  if (p.startsWith('vmalert.')) {
+    const legacy = `prometheus.${p.slice('vmalert.'.length)}`
+    if (hasConfigPath(obj, legacy)) return legacy
+  }
+  if (p.startsWith('prometheus.')) {
+    const current = `vmalert.${p.slice('prometheus.'.length)}`
+    if (hasConfigPath(obj, current)) return current
+  }
+
+  return null
 }
 
 /**
@@ -203,7 +243,7 @@ export function getServiceById(serviceId) {
  * Get configuration value for a specific service
  * Merges service-specific config with global config (service config takes precedence)
  * @param {string} serviceId - Service ID
- * @param {string} path - Dot-separated path (e.g., 'loki.fixedLabels.service')
+ * @param {string} path - Dot-separated path (e.g., 'vmlog.fixedLabels.service')
  * @param {*} fallback - Fallback value if path not found
  * @returns {*} Configuration value
  */
@@ -215,19 +255,17 @@ export function getServiceConfig(serviceId, path, fallback) {
 
   // Try to get value from service-specific config first
   if (path) {
-    const keys = path.split('.')
-    let value = service
+    const direct = tryGetPath(service, path)
+    if (direct.found) return direct.value
 
-    for (const key of keys) {
-      if (value && typeof value === 'object' && key in value) {
-        value = value[key]
-      } else {
-        // Not found in service config, try global config
-        return getConfig(path, fallback)
-      }
+    const aliasedPath = getAliasedPath(service, path)
+    if (aliasedPath) {
+      const aliased = tryGetPath(service, aliasedPath)
+      if (aliased.found) return aliased.value
     }
 
-    return value
+    // Not found in service config, try global config (which also supports aliases)
+    return getConfig(path, fallback)
   }
 
   return service
@@ -300,12 +338,13 @@ export function getAlertMuteMinutes() {
 }
 
 /**
- * Check if Prometheus alert.level is explicitly configured and enabled for current service
- * @returns {boolean} True if prometheus.alert.level is configured and non-empty
+ * Check if VMAlert alert.level is explicitly configured and enabled for current service
+ * @returns {boolean} True if vmalert.alert.level is configured and non-empty
  */
-export function isPrometheusAlertLevelEnabled() {
-  if (!hasCurrentServiceConfig('prometheus.alert.level')) return false
-  const value = getCurrentServiceConfig('prometheus.alert.level', null)
+export function isVmalertAlertLevelEnabled() {
+  if (!hasCurrentServiceConfig('vmalert.alert.level') && !hasCurrentServiceConfig('prometheus.alert.level')) return false
+
+  const value = getCurrentServiceConfig('vmalert.alert.level', getCurrentServiceConfig('prometheus.alert.level', null))
   if (typeof value === 'string') {
     return value.trim().length > 0
   }
@@ -313,11 +352,20 @@ export function isPrometheusAlertLevelEnabled() {
 }
 
 /**
- * Get Prometheus alert level for current service
+ * Get VMAlert alert level for current service
  * @returns {string} Alert level value (default: '')
  */
+export function getVmalertAlertLevel() {
+  return getCurrentServiceConfig('vmalert.alert.level', getCurrentServiceConfig('prometheus.alert.level', ''))
+}
+
+// Legacy Prometheus-named wrappers (kept for compatibility)
+export function isPrometheusAlertLevelEnabled() {
+  return isVmalertAlertLevelEnabled()
+}
+
 export function getPrometheusAlertLevel() {
-  return getCurrentServiceConfig('prometheus.alert.level', '')
+  return getVmalertAlertLevel()
 }
 
 /**
@@ -382,36 +430,112 @@ export function getLogLevelRegex(level) {
 /**
  * Get service type
  * @param {string} serviceId - Service ID (optional, defaults to current service)
- * @returns {string} Service type ('loki-multitask' or 'prometheus-multitask')
+ * @returns {string} Service type ('vmlog-multitask' or 'vmalert-multitask')
  */
 export function getServiceType(serviceId = null) {
   const id = serviceId || getCurrentServiceId()
   const service = getServiceById(id)
-  return service?.type || 'loki-multitask' // Default to loki-multitask for backward compatibility
+  return service?.type || 'vmlog-multitask' // Default to vmlog-multitask
 }
 
 /**
  * Get current service type
- * @returns {string} Service type ('loki-multitask' or 'prometheus-multitask')
+ * @returns {string} Service type ('vmlog-multitask' or 'vmalert-multitask')
  */
 export function getCurrentServiceType() {
   return getServiceType(getCurrentServiceId())
 }
 
 /**
- * Check if current service is Loki type
- * @returns {boolean} True if current service is loki-multitask
+ * Check if current service is VMLog type
+ * @returns {boolean} True if current service is vmlog-multitask
  */
-export function isLokiService() {
-  return getCurrentServiceType() === 'loki-multitask'
+export function isVmlogService() {
+  const t = getCurrentServiceType()
+  return t === 'vmlog-multitask' || t === 'loki-multitask'
 }
 
 /**
- * Check if current service is Prometheus type
- * @returns {boolean} True if current service is prometheus-multitask
+ * Check if current service is VMAlert type
+ * @returns {boolean} True if current service is vmalert-multitask
  */
+export function isVmalertService() {
+  const t = getCurrentServiceType()
+  return t === 'vmalert-multitask' || t === 'prometheus-multitask'
+}
+
+// Backward-compatible aliases
+export function isLokiService() {
+  return isVmlogService()
+}
+
 export function isPrometheusService() {
-  return getCurrentServiceType() === 'prometheus-multitask'
+  return isVmalertService()
+}
+
+// ============================================================
+// VMAlert Configuration Helpers (preferred)
+// ============================================================
+
+export function getVmalertApiBasePath() {
+  return getCurrentServiceConfig('vmalert.apiBasePath', getCurrentServiceConfig('prometheus.apiBasePath', '/prometheus/api/v1'))
+}
+
+export function getVmalertTaskLabel() {
+  return getCurrentServiceConfig('vmalert.taskLabel', getCurrentServiceConfig('prometheus.taskLabel', 'job'))
+}
+
+export function getVmalertFixedLabels() {
+  return getCurrentServiceConfig('vmalert.fixedLabels', getCurrentServiceConfig('prometheus.fixedLabels', {}))
+}
+
+export function getVmalertColumns() {
+  return getCurrentServiceConfig('vmalert.columns', getCurrentServiceConfig('prometheus.columns', []))
+}
+
+export function getVmalertPollingInterval() {
+  const value = getCurrentServiceConfig('polling.interval', null)
+  if (value !== null && value !== undefined) {
+    return value
+  }
+  return getCurrentServiceConfig('vmalert.polling.interval', getCurrentServiceConfig('prometheus.polling.interval', 5000))
+}
+
+export function getVmalertMaxRetries() {
+  return getCurrentServiceConfig('vmalert.maxRetries', getCurrentServiceConfig('prometheus.maxRetries', 3))
+}
+
+export function getVmalertRetryBaseDelay() {
+  return getCurrentServiceConfig('vmalert.retryBaseDelay', getCurrentServiceConfig('prometheus.retryBaseDelay', 1000))
+}
+
+// Legacy Prometheus helpers (kept for compatibility)
+export function getPrometheusApiBasePath() {
+  return getVmalertApiBasePath()
+}
+
+export function getPrometheusTaskLabel() {
+  return getVmalertTaskLabel()
+}
+
+export function getPrometheusFixedLabels() {
+  return getVmalertFixedLabels()
+}
+
+export function getPrometheusColumns() {
+  return getVmalertColumns()
+}
+
+export function getPrometheusPollingInterval() {
+  return getVmalertPollingInterval()
+}
+
+export function getPrometheusMaxRetries() {
+  return getVmalertMaxRetries()
+}
+
+export function getPrometheusRetryBaseDelay() {
+  return getVmalertRetryBaseDelay()
 }
 
 /**
@@ -438,18 +562,6 @@ export function getExternalUrl(serviceId) {
   return service.externalUrl || null
 }
 
-// ============================================================
-// Prometheus Configuration Helpers
-// ============================================================
-
-/**
- * Get Prometheus API base path for current service
- * @returns {string} Prometheus API base path (default: '/prometheus/api/v1')
- */
-export function getPrometheusApiBasePath() {
-  return getCurrentServiceConfig('prometheus.apiBasePath', '/prometheus/api/v1')
-}
-
 /**
  * Get Alertmanager API base path for current service
  * @returns {string} Alertmanager API base path (default: '/alertmanager/api/v2')
@@ -467,7 +579,10 @@ export function getAlertmanagerApiBasePath() {
     }
   }
 
-  return getCurrentServiceConfig('prometheus.alertmanagerBasePath', '/alertmanager/api/v2')
+  return getCurrentServiceConfig(
+    'vmalert.alertmanagerBasePath',
+    getCurrentServiceConfig('prometheus.alertmanagerBasePath', '/alertmanager/api/v2')
+  )
 }
 
 /**
@@ -499,64 +614,22 @@ export function getAlertmanagerReceivers() {
     return receiver
   }
 
-  const legacyReceivers = normalize(getCurrentServiceConfig('prometheus.alertmanagerReceivers', null))
+  const legacyReceivers = normalize(
+    getCurrentServiceConfig(
+      'vmalert.alertmanagerReceivers',
+      getCurrentServiceConfig('prometheus.alertmanagerReceivers', null)
+    )
+  )
   if (legacyReceivers.length > 0) {
     return legacyReceivers
   }
 
-  return normalize(getCurrentServiceConfig('prometheus.alertmanagerReceiver', null))
-}
-
-/**
- * Get Prometheus task label for current service
- * @returns {string} Task label (default: 'job')
- */
-export function getPrometheusTaskLabel() {
-  return getCurrentServiceConfig('prometheus.taskLabel', 'job')
-}
-
-/**
- * Get Prometheus fixed labels for current service
- * @returns {Object} Fixed labels for filtering (default: {})
- */
-export function getPrometheusFixedLabels() {
-  return getCurrentServiceConfig('prometheus.fixedLabels', {})
-}
-
-/**
- * Get Prometheus column configurations for current service
- * @returns {Array} Column configurations (default: [])
- */
-export function getPrometheusColumns() {
-  return getCurrentServiceConfig('prometheus.columns', [])
-}
-
-/**
- * Get Prometheus polling interval for current service
- * @returns {number} Polling interval in milliseconds (default: 5000)
- */
-export function getPrometheusPollingInterval() {
-  const value = getCurrentServiceConfig('polling.interval', null)
-  if (value !== null && value !== undefined) {
-    return value
-  }
-  return getCurrentServiceConfig('prometheus.polling.interval', 5000)
-}
-
-/**
- * Get Prometheus max retries for current service
- * @returns {number} Max retries (default: 3)
- */
-export function getPrometheusMaxRetries() {
-  return getCurrentServiceConfig('prometheus.maxRetries', 3)
-}
-
-/**
- * Get Prometheus retry base delay for current service
- * @returns {number} Retry base delay in milliseconds (default: 1000)
- */
-export function getPrometheusRetryBaseDelay() {
-  return getCurrentServiceConfig('prometheus.retryBaseDelay', 1000)
+  return normalize(
+    getCurrentServiceConfig(
+      'vmalert.alertmanagerReceiver',
+      getCurrentServiceConfig('prometheus.alertmanagerReceiver', null)
+    )
+  )
 }
 
 /**
@@ -565,7 +638,10 @@ export function getPrometheusRetryBaseDelay() {
  * @returns {boolean} True if DeadManSwitch is enabled
  */
 export function isDeadManSwitchEnabled() {
-  const alertName = getCurrentServiceConfig('prometheus.deadManSwitch.alertName', '')
+  const alertName = getCurrentServiceConfig(
+    'vmalert.deadManSwitch.alertName',
+    getCurrentServiceConfig('prometheus.deadManSwitch.alertName', '')
+  )
   return alertName !== null && alertName !== undefined && alertName.trim() !== ''
 }
 
@@ -574,23 +650,41 @@ export function isDeadManSwitchEnabled() {
  * @returns {string} DeadManSwitch alert name (default: '')
  */
 export function getDeadManSwitchAlertName() {
-  return getCurrentServiceConfig('prometheus.deadManSwitch.alertName', '')
+  return getCurrentServiceConfig(
+    'vmalert.deadManSwitch.alertName',
+    getCurrentServiceConfig('prometheus.deadManSwitch.alertName', '')
+  )
 }
 
 /**
- * Get Prometheus severity levels configuration for current service
+ * Get VMAlert severity levels configuration for current service
  * @returns {Array<string>} Severity levels order (default: ['critical', 'warning', 'info'])
  */
-export function getPrometheusSeverityLevels() {
-  return getCurrentServiceConfig('prometheus.severityLevels', ['critical', 'warning', 'info'])
+export function getVmalertSeverityLevels() {
+  return getCurrentServiceConfig(
+    'vmalert.severityLevels',
+    getCurrentServiceConfig('prometheus.severityLevels', ['critical', 'warning', 'info'])
+  )
 }
 
 /**
- * Get Prometheus severity label name for current service
+ * Get VMAlert severity label name for current service
  * @returns {string} Severity label name (default: 'severity')
  */
+export function getVmalertSeverityLabel() {
+  return getCurrentServiceConfig(
+    'vmalert.severityLabel',
+    getCurrentServiceConfig('prometheus.severityLabel', 'severity')
+  )
+}
+
+// Legacy Prometheus-named wrappers (kept for compatibility)
+export function getPrometheusSeverityLevels() {
+  return getVmalertSeverityLevels()
+}
+
 export function getPrometheusSeverityLabel() {
-  return getCurrentServiceConfig('prometheus.severityLabel', 'severity')
+  return getVmalertSeverityLabel()
 }
 
 /**
@@ -602,5 +696,8 @@ export function getAlertmanagerAlertMuteMinutes() {
   if (value !== null && value !== undefined) {
     return value
   }
-  return getCurrentServiceConfig('prometheus.alertmanagerAlertMuteMinutes', 10)
+  return getCurrentServiceConfig(
+    'vmalert.alertmanagerAlertMuteMinutes',
+    getCurrentServiceConfig('prometheus.alertmanagerAlertMuteMinutes', 10)
+  )
 }

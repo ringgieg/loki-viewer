@@ -8,25 +8,25 @@ vi.mock('../utils/config', () => ({
     {
       id: 'batch-sync',
       displayName: 'Batch-Sync Service',
-      type: 'loki-multitask'
+      type: 'vmlog-multitask'
     },
     {
       id: 'data-service',
       displayName: 'Data Service',
-      type: 'loki-multitask'
+      type: 'vmlog-multitask'
     },
     {
-      id: 'prometheus-alerts',
-      displayName: 'Prometheus Alerts',
-      type: 'prometheus-multitask'
+      id: 'vmalert-alerts',
+      displayName: 'VMAlert Alerts',
+      type: 'vmalert-multitask'
     }
   ]),
   getCurrentServiceId: vi.fn(() => 'batch-sync'),
   getServiceById: vi.fn((id) => {
     const services = [
-      { id: 'batch-sync', displayName: 'Batch-Sync Service', type: 'loki-multitask' },
-      { id: 'data-service', displayName: 'Data Service', type: 'loki-multitask' },
-      { id: 'prometheus-alerts', displayName: 'Prometheus Alerts', type: 'prometheus-multitask' }
+      { id: 'batch-sync', displayName: 'Batch-Sync Service', type: 'vmlog-multitask' },
+      { id: 'data-service', displayName: 'Data Service', type: 'vmlog-multitask' },
+      { id: 'vmalert-alerts', displayName: 'VMAlert Alerts', type: 'vmalert-multitask' }
     ]
     return services.find(s => s.id === id)
   }),
@@ -56,7 +56,7 @@ describe('serviceStore', () => {
       expect(store.services).toHaveLength(3)
       expect(store.services[0].id).toBe('batch-sync')
       expect(store.services[1].id).toBe('data-service')
-      expect(store.services[2].id).toBe('prometheus-alerts')
+      expect(store.services[2].id).toBe('vmalert-alerts')
     })
   })
 
@@ -85,16 +85,16 @@ describe('serviceStore', () => {
       consoleWarn.mockRestore()
     })
 
-    it('should switch between loki and prometheus services', () => {
-      // Switch to prometheus
-      store.setCurrentService('prometheus-alerts')
-      expect(store.currentServiceId).toBe('prometheus-alerts')
-      expect(store.currentService.type).toBe('prometheus-multitask')
+    it('should switch between vmlog and vmalert services', () => {
+      // Switch to vmalert
+      store.setCurrentService('vmalert-alerts')
+      expect(store.currentServiceId).toBe('vmalert-alerts')
+      expect(store.currentService.type).toBe('vmalert-multitask')
 
-      // Switch back to loki
+      // Switch back to vmlog
       store.setCurrentService('data-service')
       expect(store.currentServiceId).toBe('data-service')
-      expect(store.currentService.type).toBe('loki-multitask')
+      expect(store.currentService.type).toBe('vmlog-multitask')
     })
   })
 
@@ -107,17 +107,17 @@ describe('serviceStore', () => {
       expect(store.currentService).toEqual({
         id: 'batch-sync',
         displayName: 'Batch-Sync Service',
-        type: 'loki-multitask'
+        type: 'vmlog-multitask'
       })
     })
 
     it('should update when currentServiceId changes', () => {
-      store.setCurrentService('prometheus-alerts')
+      store.setCurrentService('vmalert-alerts')
 
       expect(store.currentService).toEqual({
-        id: 'prometheus-alerts',
-        displayName: 'Prometheus Alerts',
-        type: 'prometheus-multitask'
+        id: 'vmalert-alerts',
+        displayName: 'VMAlert Alerts',
+        type: 'vmalert-multitask'
       })
     })
 
@@ -165,8 +165,8 @@ describe('serviceStore', () => {
 
     it('should return updated serviceId after switching', () => {
       store.initialize()
-      store.setCurrentService('prometheus-alerts')
-      expect(store.getCurrentServiceId()).toBe('prometheus-alerts')
+      store.setCurrentService('vmalert-alerts')
+      expect(store.getCurrentServiceId()).toBe('vmalert-alerts')
     })
 
     it('should fall back to config default if currentServiceId is null', () => {
@@ -188,12 +188,12 @@ describe('serviceStore', () => {
       store.setCurrentService('data-service')
       expect(store.getCurrentServiceId()).toBe('data-service')
 
-      // Switch to prometheus
-      store.setCurrentService('prometheus-alerts')
-      expect(store.getCurrentServiceId()).toBe('prometheus-alerts')
+      // Switch to vmalert
+      store.setCurrentService('vmalert-alerts')
+      expect(store.getCurrentServiceId()).toBe('vmalert-alerts')
 
       // Each switch should be isolated
-      expect(store.currentService.id).toBe('prometheus-alerts')
+      expect(store.currentService.id).toBe('vmalert-alerts')
     })
   })
 })

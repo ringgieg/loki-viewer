@@ -1,7 +1,7 @@
 /**
  * RuleQueryScheduler - Priority Queue Based Rule Query Scheduler
  *
- * Schedules and executes Prometheus rule queries based on their interval.
+ * Schedules and executes VMAlert rule queries based on their interval.
  * Uses a priority queue to efficiently manage query execution timing.
  *
  * Features:

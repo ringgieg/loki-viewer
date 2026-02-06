@@ -13,15 +13,15 @@
         size="small"
         @click="refreshTasks"
         class="refresh-button"
-        :disabled="prometheusStore.loading"
+        :disabled="vmalertStore.loading"
       >
-        <el-icon :class="{ 'is-loading': prometheusStore.loading }">
+        <el-icon :class="{ 'is-loading': vmalertStore.loading }">
           <Refresh />
         </el-icon>
       </el-button>
     </div>
 
-    <div class="task-list-content" v-loading="prometheusStore.loading">
+    <div class="task-list-content" v-loading="vmalertStore.loading">
       <!-- All Alerts Option -->
       <div
         class="task-item"
@@ -52,9 +52,9 @@
           <span class="task-icon" :class="getTaskIconClass(task)">●</span>
           <span class="task-name">{{ task.name }}</span>
           <span
-            v-if="!task.existsInPrometheus"
-            class="not-in-prometheus-badge"
-            title="此任务在Prometheus中暂无告警"
+            v-if="!task.existsInVmalert"
+            class="not-in-vmalert-badge"
+            title="此任务在VMAlert中暂无告警"
           >
             无告警
           </span>
@@ -124,10 +124,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { usePrometheusStore } from '../../../stores/prometheusStore'
+import { useVmalertStore } from '../../../stores/vmalertStore'
 import { useServiceStore } from '../../../stores/serviceStore'
 import { Search, Refresh, FullScreen } from '@element-plus/icons-vue'
-import { filterAlerts } from '../../../api/prometheus'
+import { filterAlerts } from '../../../api/vmalert'
 import { getPrometheusTaskLabel } from '../../../utils/config'
 import MuteButton from '../../../components/MuteButton.vue'
 
@@ -141,7 +141,7 @@ const props = defineProps({
 
 const router = useRouter()
 const route = useRoute()
-const prometheusStore = usePrometheusStore()
+const vmalertStore = useVmalertStore()
 const serviceStore = useServiceStore()
 
 const searchQuery = ref('')
@@ -152,26 +152,26 @@ const contextMenuTask = ref(null)
 
 const filteredTasks = computed(() => {
   if (!searchQuery.value) {
-    return prometheusStore.sortedTasks
+    return vmalertStore.sortedTasks
   }
   const query = searchQuery.value.toLowerCase()
-  return prometheusStore.sortedTasks.filter(task =>
+  return vmalertStore.sortedTasks.filter(task =>
     task.name.toLowerCase().includes(query)
   )
 })
 
 const activeAlertTotal = computed(() => {
-  return (prometheusStore.alertCounts.firing || 0) + (prometheusStore.alertCounts.pending || 0)
+  return (vmalertStore.alertCounts.firing || 0) + (vmalertStore.alertCounts.pending || 0)
 })
 
 const totalAlertCount = computed(() => {
-  return prometheusStore.alertCounts.total || 0
+  return vmalertStore.alertCounts.total || 0
 })
 const taskAlertmanagerMatchMap = computed(() => {
   const taskLabel = getPrometheusTaskLabel()
   const matchedTasks = new Set()
 
-  prometheusStore.alerts.forEach(alert => {
+  vmalertStore.alerts.forEach(alert => {
     if (!alert.alertmanagerMatched) return
     const taskName = alert.labels?.[taskLabel]
     if (taskName) {
@@ -200,7 +200,7 @@ function getTaskIconClass(task) {
 
   // Check alert states
   const taskLabel = getPrometheusTaskLabel()
-  const taskAlerts = filterAlerts(prometheusStore.alerts, { [taskLabel]: task.name })
+  const taskAlerts = filterAlerts(vmalertStore.alerts, { [taskLabel]: task.name })
   const hasFiring = taskAlerts.some(alert => alert.state === 'firing')
   const hasPending = taskAlerts.some(alert => alert.state === 'pending')
 
@@ -214,13 +214,13 @@ function getTaskIconClass(task) {
 
 function getTaskAlertCount(taskName) {
   const taskLabel = getPrometheusTaskLabel()
-  const taskAlerts = filterAlerts(prometheusStore.alerts, { [taskLabel]: taskName })
+  const taskAlerts = filterAlerts(vmalertStore.alerts, { [taskLabel]: taskName })
   return taskAlerts.filter(alert => alert.state === 'firing' || alert.state === 'pending').length
 }
 
 function getAlertCountClass(taskName) {
   const taskLabel = getPrometheusTaskLabel()
-  const taskAlerts = filterAlerts(prometheusStore.alerts, { [taskLabel]: taskName })
+  const taskAlerts = filterAlerts(vmalertStore.alerts, { [taskLabel]: taskName })
 
   if (taskAlerts.length === 0) {
     return 'count-normal'
@@ -237,14 +237,14 @@ function getAlertCountClass(taskName) {
 function selectTask(taskName) {
   const serviceId = serviceStore.getCurrentServiceId()
   if (taskName) {
-    router.push(`/prometheus/${serviceId}/${taskName}`)
+    router.push(`/vmalert/${serviceId}/${taskName}`)
   } else {
-    router.push(`/prometheus/${serviceId}`)
+    router.push(`/vmalert/${serviceId}`)
   }
 }
 
 function refreshTasks() {
-  prometheusStore.refresh()
+  vmalertStore.refresh()
 }
 
 function showContextMenu(event, task) {
@@ -261,7 +261,7 @@ function closeContextMenu() {
 
 function toggleWatched() {
   if (contextMenuTask.value) {
-    prometheusStore.toggleTaskWatch(contextMenuTask.value.name)
+    vmalertStore.toggleTaskWatch(contextMenuTask.value.name)
   }
   closeContextMenu()
 }
@@ -438,7 +438,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.not-in-prometheus-badge {
+.not-in-vmalert-badge {
   font-size: 11px;
   padding: 2px 6px;
   background: var(--el-fill-color);

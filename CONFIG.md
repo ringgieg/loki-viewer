@@ -1,6 +1,6 @@
 # 配置指南 (Configuration Guide)
 
-本文档说明如何通过修改 `public/config.js` 来配置 Loki Viewer，无需重新编译应用。
+本文档说明如何通过修改 `public/config.js` 来配置 Dashboard（VMLog/VMAlert），无需重新编译应用。
 
 ## 配置文件位置
 
@@ -9,13 +9,13 @@
 
 ## 核心概念
 
-Loki Viewer 支持在一个界面中监控多个服务的日志，并可以快速切换不同服务。
+Dashboard 支持在一个界面中监控多个服务的日志/告警，并可以快速切换不同服务。
 
 **主要特性**:
 - 导航栏显示服务选择器，一键切换服务
-- 切换服务时自动重新连接 WebSocket
+- 切换服务时自动重新连接实时 tail
 - 每个服务可以有独立的配置（标签、日志级别、每页条数等）
-- 全局配置（API路径、WebSocket设置等）对所有服务生效
+- 全局配置（API 路径、tail 设置等）对所有服务生效
 - 路由格式: `/logs/:serviceId/:taskName`
 
 **配置示例**:
@@ -31,7 +31,8 @@ window.APP_CONFIG = {
     {
       id: 'batch-sync',
       displayName: '批量同步服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
@@ -44,7 +45,8 @@ window.APP_CONFIG = {
     {
       id: 'data-service',
       displayName: '数据服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'api',
           service: 'Data-Service'
@@ -56,9 +58,9 @@ window.APP_CONFIG = {
     }
   ],
 
-  // 全局 Loki API 配置（所有服务共享）
-  loki: {
-    apiBasePath: '/loki/api/v1',
+  // 全局 VMLog API 配置（所有服务共享）
+  vmlog: {
+    apiBasePath: '/select/logsql',
     api: {
       tailLimit: 100,
       tailDelayFor: '0',
@@ -75,21 +77,21 @@ window.APP_CONFIG = {
 
 - **`appTitle`**: 界面显示标题，用于导航栏显示，纯展示用途
   - 例如: "数据中台日志监控平台"、"生产环境监控"
-  - 如果不配置，默认显示 "Loki Log Viewer"
-  - 与 Loki 查询无关
+  - 如果不配置，使用默认标题
+  - 与 VMLog 查询无关
 
-- **`loki.fixedLabels.service`**: Loki 查询使用的服务标签值
+- **`vmlog.fixedLabels.service`**: VMLog 查询使用的服务标签值
   - 例如: "Batch-Sync"、"Data-Service"
-  - 这是传递给 Loki 的实际标签值，用于筛选日志
-  - 必须与 Loki 中的 service 标签完全匹配
+  - 这是传递给 VMLog 的实际标签值，用于筛选日志
+  - 必须与日志数据中的对应字段完全匹配
 
 **示例**:
 ```javascript
 window.APP_CONFIG = {
   appTitle: '数据中台日志监控',      // 导航栏显示: "数据中台日志监控"
-  loki: {
+  vmlog: {
     fixedLabels: {
-      service: 'Batch-Sync'     // Loki 查询: {service="Batch-Sync", ...}
+      service: 'Batch-Sync'     // 查询: {service="Batch-Sync", ...}
     }
   }
 }
@@ -102,7 +104,7 @@ window.APP_CONFIG = {
 #### `pageTitle` (可选)
 - **类型**: `string`
 - **默认值**: `''` (空字符串)
-- **说明**: 浏览器标签页标题。如果为空，使用默认标题 "Loki Log Viewer"
+- **说明**: 浏览器标签页标题。如果为空，使用默认标题
 - **示例**:
   ```javascript
   pageTitle: '数据中台日志监控'
@@ -110,10 +112,10 @@ window.APP_CONFIG = {
 
 #### `appTitle` (可选)
 - **类型**: `string`
-- **默认值**: `'Loki Log Viewer'`
+- **默认值**: 使用默认标题
 - **说明**: 导航栏显示的应用标题
-- **重要**: 这是独立的显示标题，与 Loki 查询中使用的 `service` 标签值分开
-- **用途**: 自定义应用在界面上的显示名称。如果不配置，默认显示 "Loki Log Viewer"
+- **重要**: 这是独立的显示标题，与 VMLog 查询中使用的 `service` 标签值分开
+- **用途**: 自定义应用在界面上的显示名称
 - **示例**:
   ```javascript
   appTitle: '数据中台日志监控平台'
@@ -139,41 +141,40 @@ window.APP_CONFIG = {
   logsPerPage: 1000
   ```
 
-### Loki API 配置
+### VMLog API 配置
 
-#### `loki.apiBasePath`
+#### `vmlog.apiBasePath`
 - **类型**: `string`
-- **默认值**: `'/loki/api/v1'`
-- **说明**: Loki API 的基础路径
+- **默认值**: `'/select/logsql'`
+- **说明**: VMLog（VictoriaLogs LogsQL）查询 API 的基础路径
 - **使用场景**: 当使用反向代理或非标准路径时
 - **示例**:
   ```javascript
-  loki: {
-    apiBasePath: '/api/loki/v1'
+  vmlog: {
+    apiBasePath: '/select/logsql'
   }
   ```
 
-- **Note**: WebSocket uses `loki.apiBasePath` host/protocol.
-  - No host in apiBasePath -> use `window.location.host`.
-  - https -> wss, http -> ws.
-
-#### `loki.api`
+#### `vmlog.api`
 - **Type**: `object`
-- **Description**: Loki API settings for tailing and retry behavior.
+- **Description**: VMLog API settings for tailing and retry behavior.
 - **Fields**:
-  - `tailLimit`: Max tail log entries per WebSocket batch (default: `100`)
-  - `tailDelayFor`: Tail delay window (default: `'0'`)
-  - `maxRetries`: Max retries for Loki API requests (default: `3`)
+  - `tailDelayFor`: Tail offset window in seconds (default: `'0'`)
+  - `maxRetries`: Max retries for VMLog API requests (default: `3`)
   - `retryBaseDelay`: Base delay for exponential backoff in ms (default: `1000`)
 
-#### `loki.labelNames.service`
-- **类型**: `string`
-- **默认值**: `'service'`
-- **说明**: Loki 中用于标识服务的**标签名**
-#### `loki.fixedLabels`
+#### `vmlog.websocket`
+- **Type**: `object`
+- **Description**: 实时 tail 的重连/刷新设置（实现为 HTTP streaming，历史命名保留为 websocket）
+- **Fields**:
+  - `refreshInterval`: Tail refresh interval (default: `'1s'`)
+  - `reconnectDelay`: Reconnect delay in ms (default: `3000`)
+  - `initializationDelay`: Delay before alerts in ms (default: `2000`)
+
+#### `vmlog.fixedLabels`
 - **类型**: `object`
 - **默认值**: `{ job: 'tasks', service: 'Batch-Sync' }`
-- **说明**: 固定的标签筛选器，会自动添加到所有 Loki 查询中
+- **说明**: 固定的标签筛选器，会自动添加到所有查询中
 - **用途**: 这些是固定的 `label="value"` 对，用于限定查询范围。**包括服务名**
 - **重要**: `service` 应该在这里配置，而不是作为顶层配置项
 - **使用场景**:
@@ -183,7 +184,7 @@ window.APP_CONFIG = {
   - 添加必需的业务标签过滤器
 - **示例**:
   ```javascript
-  loki: {
+  vmlog: {
     fixedLabels: {
       job: 'tasks',
       service: 'Data-Service',
@@ -196,22 +197,22 @@ window.APP_CONFIG = {
 
   **最小配置**:
   ```javascript
-  loki: {
+  vmlog: {
     fixedLabels: {
       service: 'Batch-Sync'  // 至少需要指定服务
     }
   }
   ```
 
-#### `loki.taskLabel`
+#### `vmlog.taskLabel`
 - **类型**: `string`
 - **默认值**: `'task_name'`
-- **说明**: Loki 中用于任务分类的**动态标签名**
+- **说明**: 用于任务分类的**动态标签名**
 - **用途**: 该标签用于获取任务列表并按任务过滤日志
-- **使用场景**: 当 Loki 使用不同的标签名来标识任务时（如 `job_name`、`task`、`job_id` 等）
+- **使用场景**: 当日志使用不同的标签名来标识任务时（如 `job_name`、`task`、`job_id` 等）
 - **示例**:
   ```javascript
-  loki: {
+  vmlog: {
     taskLabel: 'job_name'  // 查询将使用 job_name="xxx" 来过滤任务
   }
   ```
@@ -234,7 +235,7 @@ window.APP_CONFIG = {
 - **服务配置对象**:
   - `id` (必填): 服务唯一标识
   - `displayName` (必填): 服务显示名称
-  - `loki` (必填): 该服务的 Loki 配置（fixedLabels, taskLabel）
+  - `vmlog` (必填): 该服务的 VMLog 配置（fixedLabels, taskLabel）
   - `defaultLogLevel` (可选): 该服务的默认日志级别
   - `logsPerPage` (可选): 该服务的每页日志条数
 - **示例**:
@@ -243,7 +244,8 @@ window.APP_CONFIG = {
     {
       id: 'batch-sync',
       displayName: '批量同步服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
@@ -256,7 +258,8 @@ window.APP_CONFIG = {
     {
       id: 'data-service',
       displayName: '数据服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'api',
           service: 'Data-Service'
@@ -270,8 +273,8 @@ window.APP_CONFIG = {
   ```
 
 **注意**:
-- `loki.fixedLabels` 和 `loki.taskLabel` 必须配置在每个服务对象中
-- 全局 `loki` 配置（apiBasePath、api、websocket）对所有服务生效
+- `vmlog.fixedLabels` 和 `vmlog.taskLabel` 必须配置在每个服务对象中
+- 全局 `vmlog` 配置（apiBasePath、api、websocket）对所有服务生效
 - 可以为不同服务配置不同的日志级别和每页条数
 - `activeService` 必须是 `services` 数组中的某个服务的 ID
 
@@ -310,16 +313,16 @@ window.APP_CONFIG = {
 - **说明**: 触发加载更多的滚动阈值 (0-1 之间的小数)
 - **示例**: `0.2` 表示滚动到距离底部 20% 时加载更多
 
-### WebSocket 配置
+### 实时 Tail 配置
 
-WebSocket 断开后会持续重连，直到成功建立新连接或手动关闭。
+实时 tail 断开后会持续重连，直到成功建立新连接或手动关闭（实现为 HTTP streaming，历史命名保留为 websocket）。
 
-#### `loki.websocket.reconnectDelay`
+#### `vmlog.websocket.reconnectDelay`
 - **类型**: `number`
 - **默认值**: `3000`
 - **说明**: 重连延迟时间 (毫秒)
 
-#### `loki.websocket.initializationDelay`
+#### `vmlog.websocket.initializationDelay`
 - **类型**: `number`
 - **默认值**: `2000`
 - **说明**: 初始化完成后多久开始监控新错误 (毫秒)
@@ -340,9 +343,9 @@ WebSocket 断开后会持续重连，直到成功建立新连接或手动关闭�
 - **默认值**: `7`
 - **说明**: 默认查询多少天的日志数据
 - **用途**: 控制初始加载和分页加载时的时间范围
-- **建议**: 根据日志量和 Loki 性能调整
+- **建议**: 根据日志量和 VMLog 性能调整
   - 日志量大时建议设置较小值（如 3-7 天）
-  - Loki 对查询时间范围有限制，过大可能导致查询超时
+  - 时间范围过大可能导致查询超时
 - **注意**: 此配置可在全局设置，也可在每个服务中单独设置
 - **示例**:
   ```javascript
@@ -360,7 +363,7 @@ WebSocket 断开后会持续重连，直到成功建立新连接或手动关闭�
       query: {
         defaultTimeRangeDays: 14  // 该服务查询 14 天
       },
-      loki: { ... }
+      vmlog: { ... }
     },
     {
       id: 'data-service',
@@ -368,7 +371,7 @@ WebSocket 断开后会持续重连，直到成功建立新连接或手动关闭�
       query: {
         defaultTimeRangeDays: 3   // 该服务只查询 3 天
       },
-      loki: { ... }
+      vmlog: { ... }
     }
   ]
   ```
@@ -385,7 +388,8 @@ window.APP_CONFIG = {
     {
       id: 'batch-sync',
       displayName: '批量同步服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
@@ -395,10 +399,9 @@ window.APP_CONFIG = {
     }
   ],
 
-  loki: {
-    apiBasePath: '/loki/api/v1',
+  vmlog: {
+    apiBasePath: '/select/logsql',
     api: {
-      tailLimit: 100,
       tailDelayFor: '0',
       maxRetries: 3,
       retryBaseDelay: 1000
@@ -417,7 +420,8 @@ window.APP_CONFIG = {
     {
       id: 'batch-sync',
       displayName: '批量同步服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
@@ -430,7 +434,8 @@ window.APP_CONFIG = {
     {
       id: 'data-service',
       displayName: '数据服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'api',
           service: 'Data-Service'
@@ -442,10 +447,9 @@ window.APP_CONFIG = {
     }
   ],
 
-  loki: {
-    apiBasePath: '/loki/api/v1',
+  vmlog: {
+    apiBasePath: '/select/logsql',
     api: {
-      tailLimit: 100,
       tailDelayFor: '0',
       maxRetries: 3,
       retryBaseDelay: 1000
@@ -454,7 +458,7 @@ window.APP_CONFIG = {
 }
 ```
 
-### 示例 3: 使用外部 Loki 服务器和多标签筛选
+### 示例 3: 使用外部 VMLog 服务器和多标签筛选
 ```javascript
 window.APP_CONFIG = {
   appTitle: '生产环境监控',
@@ -464,7 +468,8 @@ window.APP_CONFIG = {
     {
       id: 'my-service',
       displayName: '我的服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         // 固定的标签筛选器（包括服务名、环境、集群等）
         fixedLabels: {
           service: 'My-Service',
@@ -476,10 +481,9 @@ window.APP_CONFIG = {
     }
   ],
 
-  loki: {
-    apiBasePath: '/loki/api/v1',
+  vmlog: {
+    apiBasePath: 'http://127.0.0.1:9428/select/logsql',
     api: {
-      tailLimit: 100,
       tailDelayFor: '0',
       maxRetries: 3,
       retryBaseDelay: 1000
@@ -501,7 +505,8 @@ window.APP_CONFIG = {
     {
       id: 'batch-sync',
       displayName: '批量同步服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
@@ -514,7 +519,8 @@ window.APP_CONFIG = {
     {
       id: 'data-service',
       displayName: '数据服务',
-      loki: {
+      type: 'vmlog-multitask',
+      vmlog: {
         fixedLabels: {
           job: 'api',
           service: 'Data-Service'
@@ -526,10 +532,9 @@ window.APP_CONFIG = {
     }
   ],
 
-  loki: {
-    apiBasePath: '/loki/api/v1',
+  vmlog: {
+    apiBasePath: '/select/logsql',
     api: {
-      tailLimit: 100,
       tailDelayFor: '0',
       maxRetries: 3,
       retryBaseDelay: 1000
@@ -578,9 +583,9 @@ window.APP_CONFIG = {
 - 确保 `window.APP_CONFIG` 对象正确定义
 - 清除浏览器缓存后重试
 
-### WebSocket 连接失败
-- 检查 `loki.apiBasePath` 和 `loki.apiBasePath` 配置
-- 确认 Loki 服务器可访问
+### Tail 连接失败
+- 检查 `vmlog.apiBasePath` 配置
+- 确认 VMLog（VictoriaLogs）服务可访问
 - 检查浏览器控制台的错误信息
 
 ### 路由不工作

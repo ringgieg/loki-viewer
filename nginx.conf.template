@@ -26,13 +26,13 @@ server {
         add_header Content-Type text/plain;
     }
 
-    # Loki API reverse proxy configuration
-    # LOKI_URL can be customized via environment variable (default: http://loki:3100)
-    location /loki/ {
+    # VictoriaLogs (vmlog) reverse proxy configuration
+    # VMLOG_URL can be customized via environment variable (default: http://vmlog:9428)
+    location /select/ {
         # Use environment variable or default value
-        # In docker-compose, set LOKI_URL environment variable
-        # Example: LOKI_URL=http://your-loki-server:3100
-        proxy_pass ${LOKI_URL}/;
+        # In docker-compose, set VMLOG_URL environment variable
+        # Example: VMLOG_URL=http://your-vmlog-server:9428
+        proxy_pass ${VMLOG_URL}/;
 
         # Proxy headers
         proxy_set_header Host $host;
@@ -40,7 +40,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # WebSocket support for /loki/api/v1/tail
+        # LogsQL tail uses HTTP streaming (no WebSocket required)
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

@@ -24,7 +24,6 @@
     <div class="task-list-content" v-loading="store.loading">
       <div
         v-for="task in filteredTasks"
-        :key="task.name"
         class="task-item"
         :class="{
           'is-selected': route.params.taskName === task.name,
@@ -37,9 +36,9 @@
           <span class="task-icon" :class="getTaskIconClass(task)">●</span>
           <span class="task-name">{{ task.name }}</span>
           <span
-            v-if="!task.existsInLoki"
-            class="not-in-loki-badge"
-            title="此任务在Loki中暂无日志"
+            v-if="!task.existsInVmLog"
+            class="not-in-vmlog-badge"
+            title="此任务在VMLog中暂无日志"
           >
             无日志
           </span>
@@ -343,7 +342,7 @@ onUnmounted(() => {
   font-weight: 400;
 }
 
-.not-in-loki-badge {
+.not-in-vmlog-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;

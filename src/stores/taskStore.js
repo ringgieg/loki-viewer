@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getTaskNames } from '../api/loki'
+import { getTaskNames } from '../api/vmlog'
 import { useServiceStore } from './serviceStore'
 
 const STORAGE_KEY_PREFIX = 'dashboard-watched-tasks'
@@ -64,16 +64,16 @@ export const useTaskStore = defineStore('task', () => {
     loading.value = true
     try {
       const taskNames = await getTaskNames()
-      const lokiTaskSet = new Set(taskNames)
+      const vmlogTaskSet = new Set(taskNames)
 
-      // Merge tasks from Loki with watched tasks
-      // This ensures watched tasks are always shown, even if they don't exist in Loki yet
+      // Merge tasks from VMLog with watched tasks
+      // This ensures watched tasks are always shown, even if they don't exist in VMLog yet
       const allTaskNames = new Set([...taskNames, ...watchedTasks.value])
 
       tasks.value = Array.from(allTaskNames).map(name => ({
         name,
         watched: watchedTasks.value.has(name),
-        existsInLoki: lokiTaskSet.has(name) // Flag to indicate if task has logs in Loki
+        existsInVmLog: vmlogTaskSet.has(name) // Flag to indicate if task has logs in VMLog
       }))
     } catch (e) {
       console.error('Error fetching tasks:', e)

@@ -69,11 +69,13 @@ function handleServiceSwitch(serviceId) {
 
   // Navigate to new service with full page reload
   // This ensures all state is cleared and components are freshly mounted
-  if (newServiceType === 'prometheus-multitask') {
-    window.location.href = `/prometheus/${serviceId}`
-  } else if (newServiceType === 'loki-multitask') {
-    window.location.href = `/logs/${serviceId}`
+  if (newServiceType === 'vmalert-multitask') {
+    window.location.href = `/vmalert/${serviceId}`
+    return
   }
+
+  // Default to logs view for other service types.
+  window.location.href = `/logs/${serviceId}`
 }
 </script>
 

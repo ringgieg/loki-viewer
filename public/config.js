@@ -1,19 +1,19 @@
 /**
- * Loki Viewer 运行时配?
+ * Dashboard 运行时配置
  *
- * 此文件可在构建后修改，无需重新编译?
- * 它将作为静态文件从 public 目录提供?
+ * 此文件可在构建后修改，无需重新编译
+ * 它将作为静态文件从 public 目录提供
  */
 window.APP_CONFIG = {
   // ============================================================
   // 全局配置
   // ============================================================
 
-  // 页面标题（浏览器标签页，可选，默认? "Loki Log Viewer"?
+  // 页面标题（浏览器标签页，可选）
   pageTitle: 'Grafana Stack Dashboard',
 
-  // 活动服务 ID（启动时监控哪个服务，可选，默认? 第一个服务的 ID?
-  activeService: 'prometheus-dashboard',
+  // 活动服务 ID（启动时监控哪个服务，可选，默认：第一个服务的 ID）
+  activeService: 'vmalert-dashboard',
 
   // 服务配置（必需，至少配置一个服务）
   // 每个服务都有自己的完整配?
@@ -22,12 +22,12 @@ window.APP_CONFIG = {
       // ========== 服务基本信息 ==========
       id: 'batch-sync',                           // 必需：服务唯一标识?
       displayName: 'Batch-Sync Service',          // 必需：服务显示名?
-      type: 'loki-multitask', 
+      type: 'vmlog-multitask',
 
-      // ========== Loki 连接配置 ==========
-      loki: {
+      // ========== VMLog 连接配置 ==========
+      vmlog: {
         // API 配置
-        apiBasePath: '/loki/api/v1',              // 可选，默认值：'/loki/api/v1'
+        apiBasePath: '/select/logsql',
         // WebSocket host/protocol follows apiBasePath
         websocket: {
           reconnectDelay: 3000, // optional: reconnect delay (ms)
@@ -40,7 +40,7 @@ window.APP_CONFIG = {
           retryBaseDelay: 1000
         },
 
-        // Loki 查询标签（必需?
+        // 查询标签（必需?
         fixedLabels: {                            // 必需：固定查询标?
           job: 'tasks',
           service: 'Batch-Sync'
@@ -70,10 +70,10 @@ window.APP_CONFIG = {
       logLevels: ['ERROR', 'WARN', 'INFO', 'DEBUG'] // 可选，有完整默认配?
     },
     {
-      // ========== Prometheus 告警监控服务 ==========
-      id: 'prometheus-dashboard',                    // 必需：服务唯一标识?
-      displayName: 'Prometheus Dashboard',           // 必需：服务显示名?
-      type: 'prometheus-multitask',               // 必需：服务类?
+      // ========== VMAlert 告警监控服务 ==========
+      id: 'vmalert-dashboard',                    // 必需：服务唯一标识?
+      displayName: 'VMAlert Dashboard',           // 必需：服务显示名?
+      type: 'vmalert-multitask',               // 必需：服务类?
 
       // ========== 告警配置 ==========
       alert: {
@@ -93,8 +93,8 @@ window.APP_CONFIG = {
         interval: 5000                          // 可选，默认值：5000（轮询间隔，毫秒?
       },
 
-      // ========== Prometheus 连接配置 ==========
-      prometheus: {
+      // ========== VMAlert 连接配置 ==========
+      vmalert: {
         // API 配置（使用统一告警端点）
         apiBasePath: 'http://127.0.0.1:8880/api/v1',       // 统一告警 API 地址
 

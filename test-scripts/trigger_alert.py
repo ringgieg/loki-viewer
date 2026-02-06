@@ -14,7 +14,15 @@ from datetime import datetime
 DEFAULT_TASK_NAME = "test_task"
 DEFAULT_COUNT = 10
 DEFAULT_LEVEL = "MIXED"
-DEFAULT_LOKI_URL = "http://127.0.0.1:3100"
+DEFAULT_VMLOG_URL = "http://127.0.0.1:9428"
+DEFAULT_PUSH_PATH = "/insert/loki/api/v1/push"
+
+
+def _session_no_proxy():
+    """Create a requests session that ignores system proxy env vars."""
+    s = requests.Session()
+    s.trust_env = False
+    return s
 
 # Log level configurations
 LOG_LEVELS = {
@@ -61,8 +69,8 @@ LOG_LEVELS = {
 }
 
 
-def send_log(loki_url, task_name, log_number, level, total_count):
-    """Send a single log with specified level to Loki"""
+def send_log(vmlog_url, task_name, log_number, level, total_count, push_path=DEFAULT_PUSH_PATH):
+    """Send a single log with specified level to vmlog (Loki push-compatible endpoint)."""
     # Generate timestamp in nanoseconds
     timestamp_ns = int(time.time() * 1_000_000_000)
 
@@ -101,8 +109,12 @@ def send_log(loki_url, task_name, log_number, level, total_count):
     }
 
     try:
-        response = requests.post(
-            f"{loki_url}/loki/api/v1/push",
+        base = vmlog_url.rstrip("/")
+        path = push_path if push_path.startswith("/") else f"/{push_path}"
+        push_url = f"{base}{path}"
+
+        response = _session_no_proxy().post(
+            push_url,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=5
@@ -143,7 +155,8 @@ if __name__ == "__main__":
     task_name = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TASK_NAME
     count = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_COUNT
     level_mode = sys.argv[3].upper() if len(sys.argv) > 3 else DEFAULT_LEVEL
-    loki_url = sys.argv[4] if len(sys.argv) > 4 else DEFAULT_LOKI_URL
+    vmlog_url = sys.argv[4] if len(sys.argv) > 4 else DEFAULT_VMLOG_URL
+    push_path = sys.argv[5] if len(sys.argv) > 5 else DEFAULT_PUSH_PATH
 
     # Validate level
     if level_mode not in ["ERROR", "WARN", "INFO", "DEBUG", "MIXED"]:
@@ -157,7 +170,8 @@ if __name__ == "__main__":
     print(f"Task Name:  \033[1;37m{task_name}\033[0m")
     print(f"Log Count:  \033[1;37m{count}\033[0m")
     print(f"Level Mode: \033[1;37m{level_mode}\033[0m")
-    print(f"Loki URL:   \033[1;37m{loki_url}\033[0m")
+    print(f"vmlog URL:  \033[1;37m{vmlog_url}\033[0m")
+    print(f"Push Path:  \033[1;37m{push_path}\033[0m")
     print(f"\033[1;33m{'='*60}\033[0m")
     print()
 
@@ -167,7 +181,7 @@ if __name__ == "__main__":
 
     for i in range(1, count + 1):
         level = get_level_for_log(i, level_mode)
-        if send_log(loki_url, task_name, i, level, count):
+        if send_log(vmlog_url, task_name, i, level, count, push_path=push_path):
             success_count += 1
             level_counts[level] += 1
         time.sleep(0.3)  # Reduced delay for faster testing
@@ -199,7 +213,7 @@ if __name__ == "__main__":
     print(f"\033[1;33m{'='*60}\033[0m")
     print()
     print("\033[1;33mUsage:\033[0m")
-    print(f"\033[1;37m  python trigger_alert.py [task_name] [count] [level] [loki_url]\033[0m")
+    print(f"\033[1;37m  python trigger_alert.py [task_name] [count] [level] [vmlog_url] [push_path]\033[0m")
     print()
     print("\033[1;33mExamples:\033[0m")
     print(f"\033[1;37m  python trigger_alert.py my_task 20 MIXED\033[0m")

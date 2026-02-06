@@ -3,10 +3,10 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useWsStore } from './wsStore'
 import { useAlertStore } from './alertStore'
 import { useTaskStore } from './taskStore'
-import * as lokiApi from '../api/loki'
+import * as vmlogApi from '../api/vmlog'
 import * as config from '../utils/config'
 
-vi.mock('../api/loki')
+vi.mock('../api/vmlog')
 vi.mock('../utils/config')
 
 describe('wsStore', () => {
@@ -33,8 +33,8 @@ describe('wsStore', () => {
           'INFO': ['ERROR', 'WARN', 'INFO'],
           'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
         },
-        'loki.fixedLabels.service': 'Test Service',
-        'loki.websocket.initializationDelay': 100
+        'vmlog.fixedLabels.service': 'Test Service',
+        'vmlog.websocket.initializationDelay': 100
       }
       return configs[path] ?? fallback
     })
@@ -51,10 +51,10 @@ describe('wsStore', () => {
     vi.spyOn(config, 'isAlertLevelEnabled').mockReturnValue(true)
 
     // Mock buildTaskQuery
-    vi.spyOn(lokiApi, 'buildTaskQuery').mockReturnValue('mocked-query')
+    vi.spyOn(vmlogApi, 'buildTaskQuery').mockReturnValue('mocked-query')
 
     // Mock tailLogs
-    vi.spyOn(lokiApi, 'tailLogs').mockImplementation((query, callbacks) => {
+    vi.spyOn(vmlogApi, 'tailLogs').mockImplementation((query, callbacks) => {
       // Store callbacks for testing
       wsStore._testCallbacks = callbacks
       return {
@@ -123,7 +123,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'loki.websocket.initializationDelay') return 100
+        if (path === 'vmlog.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -168,7 +168,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'loki.websocket.initializationDelay') return 100
+        if (path === 'vmlog.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -200,7 +200,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'loki.websocket.initializationDelay') return 100
+        if (path === 'vmlog.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -228,7 +228,7 @@ describe('wsStore', () => {
       config.getCurrentServiceConfig.mockImplementation((path, fallback) => {
         if (path === 'alert.level') return 'WARN'
         if (path === 'logLevels.mapping') return null // No custom mapping
-        if (path === 'loki.websocket.initializationDelay') return 100
+        if (path === 'vmlog.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -262,7 +262,7 @@ describe('wsStore', () => {
       config.getCurrentServiceConfig.mockImplementation((path, fallback) => {
         if (path === 'alert.level') return 'WARN'
         if (path === 'logLevels.mapping') return customMapping
-        if (path === 'loki.websocket.initializationDelay') return 100
+        if (path === 'vmlog.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -429,7 +429,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'loki.websocket.initializationDelay') return 100
+        if (path === 'vmlog.websocket.initializationDelay') return 100
         return fallback
       })
 

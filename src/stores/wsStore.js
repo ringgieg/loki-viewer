@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { tailLogs, buildTaskQuery } from '../api/loki'
+import { tailLogs, buildTaskQuery } from '../api/vmlog'
 import { useAlertStore } from './alertStore'
 import { useTaskStore } from './taskStore'
 import {
@@ -97,14 +97,14 @@ export const useWsStore = defineStore('ws', () => {
       onOpen: () => {
         isConnected.value = true
         hadConnection = true
-        const serviceName = getCurrentServiceConfig('loki.fixedLabels.service', 'service')
+        const serviceName = getCurrentServiceConfig('vmlog.fixedLabels.service', 'service')
         console.log(`WebSocket connected to service: ${serviceName}`)
         // Remove disconnect alert when reconnected
         alertStore.removeAlertReason('disconnect')
 
         // Delay marking initialization as complete to allow initial historical logs to load
         // This prevents false alerts from historical logs on page load
-        const delay = getCurrentServiceConfig('loki.websocket.initializationDelay', 2000)
+        const delay = getCurrentServiceConfig('vmlog.websocket.initializationDelay', 2000)
         setTimeout(() => {
           isInitializing = false
           console.log('Initialization complete, now monitoring for new errors')
@@ -112,7 +112,7 @@ export const useWsStore = defineStore('ws', () => {
       },
       onClose: () => {
         isConnected.value = false
-        const serviceName = getCurrentServiceConfig('loki.fixedLabels.service', 'service')
+        const serviceName = getCurrentServiceConfig('vmlog.fixedLabels.service', 'service')
         console.log(`WebSocket disconnected from service: ${serviceName}, hadConnection:`, hadConnection)
         // Trigger disconnect alert only if we had a connection before
         if (hadConnection && alertLevelConfigured) {
