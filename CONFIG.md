@@ -59,8 +59,12 @@ window.APP_CONFIG = {
   // 全局 Loki API 配置（所有服务共享）
   loki: {
     apiBasePath: '/loki/api/v1',
-    wsProtocol: '',
-    wsHost: ''
+    api: {
+      tailLimit: 100,
+      tailDelayFor: '0',
+      maxRetries: 3,
+      retryBaseDelay: 1000
+    }
   }
 }
 ```
@@ -149,29 +153,18 @@ window.APP_CONFIG = {
   }
   ```
 
-#### `loki.wsProtocol` (可选)
-- **类型**: `string`
-- **默认值**: `''` (自动检测)
-- **可选值**: `'ws'`, `'wss'`, `''`
-- **说明**: WebSocket 协议。为空时自动根据页面协议选择 (HTTPS→wss, HTTP→ws)
-- **示例**:
-  ```javascript
-  loki: {
-    wsProtocol: 'wss'  // 强制使用 wss
-  }
-  ```
+- **Note**: WebSocket uses `loki.apiBasePath` host/protocol.
+  - No host in apiBasePath -> use `window.location.host`.
+  - https -> wss, http -> ws.
 
-#### `loki.wsHost` (可选)
-- **类型**: `string`
-- **默认值**: `''` (使用当前页面的 host)
-- **说明**: WebSocket 服务器地址。为空时使用 `window.location.host`
-- **使用场景**: WebSocket 服务器与页面服务器不在同一地址时
-- **示例**:
-  ```javascript
-  loki: {
-    wsHost: 'loki.example.com:3100'
-  }
-  ```
+#### `loki.api`
+- **Type**: `object`
+- **Description**: Loki API settings for tailing and retry behavior.
+- **Fields**:
+  - `tailLimit`: Max tail log entries per WebSocket batch (default: `100`)
+  - `tailDelayFor`: Tail delay window (default: `'0'`)
+  - `maxRetries`: Max retries for Loki API requests (default: `3`)
+  - `retryBaseDelay`: Base delay for exponential backoff in ms (default: `1000`)
 
 #### `loki.labelNames.service`
 - **类型**: `string`
@@ -278,7 +271,7 @@ window.APP_CONFIG = {
 
 **注意**:
 - `loki.fixedLabels` 和 `loki.taskLabel` 必须配置在每个服务对象中
-- 全局 `loki` 配置（apiBasePath、wsProtocol、wsHost）对所有服务生效
+- 全局 `loki` 配置（apiBasePath、api、websocket）对所有服务生效
 - 可以为不同服务配置不同的日志级别和每页条数
 - `activeService` 必须是 `services` 数组中的某个服务的 ID
 
@@ -319,17 +312,14 @@ window.APP_CONFIG = {
 
 ### WebSocket 配置
 
-#### `websocket.maxReconnectAttempts`
-- **类型**: `number`
-- **默认值**: `5`
-- **说明**: WebSocket 断开后的最大重连次数
+WebSocket 断开后会持续重连，直到成功建立新连接或手动关闭。
 
-#### `websocket.reconnectDelay`
+#### `loki.websocket.reconnectDelay`
 - **类型**: `number`
 - **默认值**: `3000`
 - **说明**: 重连延迟时间 (毫秒)
 
-#### `websocket.initializationDelay`
+#### `loki.websocket.initializationDelay`
 - **类型**: `number`
 - **默认值**: `2000`
 - **说明**: 初始化完成后多久开始监控新错误 (毫秒)
@@ -406,7 +396,13 @@ window.APP_CONFIG = {
   ],
 
   loki: {
-    apiBasePath: '/loki/api/v1'
+    apiBasePath: '/loki/api/v1',
+    api: {
+      tailLimit: 100,
+      tailDelayFor: '0',
+      maxRetries: 3,
+      retryBaseDelay: 1000
+    }
   }
 }
 ```
@@ -447,7 +443,13 @@ window.APP_CONFIG = {
   ],
 
   loki: {
-    apiBasePath: '/loki/api/v1'
+    apiBasePath: '/loki/api/v1',
+    api: {
+      tailLimit: 100,
+      tailDelayFor: '0',
+      maxRetries: 3,
+      retryBaseDelay: 1000
+    }
   }
 }
 ```
@@ -476,8 +478,12 @@ window.APP_CONFIG = {
 
   loki: {
     apiBasePath: '/loki/api/v1',
-    wsProtocol: 'wss',
-    wsHost: 'loki.example.com:3100'
+    api: {
+      tailLimit: 100,
+      tailDelayFor: '0',
+      maxRetries: 3,
+      retryBaseDelay: 1000
+    }
   }
 }
 // 查询示例: {service="My-Service", env="production", cluster="k8s-prod-01", job_name="xxx"}
@@ -522,8 +528,16 @@ window.APP_CONFIG = {
 
   loki: {
     apiBasePath: '/loki/api/v1',
-    wsProtocol: '',  // 自动检测
-    wsHost: ''       // 使用当前 host
+    api: {
+      tailLimit: 100,
+      tailDelayFor: '0',
+      maxRetries: 3,
+      retryBaseDelay: 1000
+    },
+    websocket: {
+      reconnectDelay: 3000,
+      initializationDelay: 2000
+    }
   },
 
   routing: {
@@ -534,12 +548,6 @@ window.APP_CONFIG = {
     estimatedItemHeight: 60,
     bufferSize: 10,
     loadMoreThreshold: 0.2
-  },
-
-  websocket: {
-    maxReconnectAttempts: 5,
-    reconnectDelay: 3000,
-    initializationDelay: 2000
   },
 
   alert: {
@@ -571,7 +579,7 @@ window.APP_CONFIG = {
 - 清除浏览器缓存后重试
 
 ### WebSocket 连接失败
-- 检查 `loki.wsProtocol` 和 `loki.wsHost` 配置
+- 检查 `loki.apiBasePath` 和 `loki.apiBasePath` 配置
 - 确认 Loki 服务器可访问
 - 检查浏览器控制台的错误信息
 

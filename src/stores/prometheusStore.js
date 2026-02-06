@@ -10,7 +10,11 @@ import {
   getPrometheusColumns,
   isDeadManSwitchEnabled,
   getDeadManSwitchAlertName,
-  getAlertmanagerReceivers
+  getAlertmanagerReceivers,
+  getPrometheusSeverityLevels,
+  getPrometheusSeverityLabel,
+  getPrometheusAlertLevel,
+  isPrometheusAlertLevelEnabled
 } from '../utils/config'
 import {
   applyAlertmanagerReceiverMapping,
@@ -222,6 +226,7 @@ export const usePrometheusStore = defineStore('prometheus', () => {
 
       // Trigger alert if there are firing alerts (excluding DeadManSwitch)
       checkForFiringAlerts()
+      checkForFiringAlertsByLevel()
     } catch (e) {
       console.error('[PrometheusStore] Error fetching alerts:', e)
       ElMessage.error('获取告警列表失败')
@@ -275,6 +280,86 @@ export const usePrometheusStore = defineStore('prometheus', () => {
       })
 
       // Trigger alert with all firing alert names
+      reasons.forEach(reason => {
+        alertStore.triggerAlert(reason)
+      })
+    }
+  }
+
+  function resolvePrometheusState(alert) {
+    if (!alert) return 'inactive'
+    if (alert.state) return alert.state
+    const statusState = alert.status?.state
+    if (statusState) return statusState
+    return 'inactive'
+  }
+
+  function normalizeAlertLevel(value) {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'string') return value.trim().toUpperCase()
+    return String(value).trim().toUpperCase()
+  }
+
+  function getAllowedSeverityLevels(alertLevel) {
+    const severityLevels = getPrometheusSeverityLevels()
+    if (!Array.isArray(severityLevels) || severityLevels.length === 0) {
+      return []
+    }
+
+    const normalizedLevels = severityLevels.map(level => String(level).toLowerCase())
+    const levelIndex = normalizedLevels.indexOf(String(alertLevel).toLowerCase())
+    if (levelIndex === -1) {
+      return []
+    }
+
+    return normalizedLevels.slice(0, levelIndex + 1)
+  }
+
+  // Check for firing alerts and trigger alert overlay based on alert.level (excluding DeadManSwitch)
+  function checkForFiringAlertsByLevel() {
+    if (!isPrometheusAlertLevelEnabled()) {
+      return
+    }
+
+    const alertLevel = normalizeAlertLevel(getPrometheusAlertLevel())
+    if (!alertLevel) {
+      return
+    }
+
+    const allowedSeverities = getAllowedSeverityLevels(alertLevel)
+    if (allowedSeverities.length === 0) {
+      return
+    }
+
+    const severityLabel = getPrometheusSeverityLabel()
+    const sourceAlerts = Array.isArray(alerts.value) ? alerts.value : []
+
+    const firingAlerts = sourceAlerts.filter(alert => {
+      if (isDeadManSwitchAlert(alert)) {
+        return false
+      }
+
+      const state = resolvePrometheusState(alert)
+      if (state !== 'active' && state !== 'firing') {
+        return false
+      }
+
+      const severity = alert.labels?.[severityLabel]
+      if (!severity) {
+        return false
+      }
+
+      return allowedSeverities.includes(String(severity).toLowerCase())
+    })
+
+    if (firingAlerts.length > 0) {
+      const alertStore = useAlertStore()
+      const reasons = firingAlerts.map(alert => {
+        const alertname = alert.labels?.alertname || alert.labels?.name || alert.name || 'Unknown'
+        const instance = alert.labels?.instance || alert.labels?.job || ''
+        return instance ? `${alertname} (${instance})` : alertname
+      })
+
       reasons.forEach(reason => {
         alertStore.triggerAlert(reason)
       })
@@ -449,20 +534,69 @@ export const usePrometheusStore = defineStore('prometheus', () => {
     const result = []
     const sortKeys = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' })
 
+    const resolveLabelValue = (alert, labelName, labelSource) => {
+      if (labelSource === 'metricLabels') {
+        const value = alert.metricLabels?.[labelName]
+        if (!value) {
+          return { skip: true }
+        }
+        return { value }
+      }
+
+      const value = alert.labels?.[labelName]
+      if (!value) {
+        return { value: 'unknown' }
+      }
+      return { value }
+    }
+
     // Process each column configuration
     columns.forEach(columnConfig => {
       const columnLabel = columnConfig.label
       const columnLabelSource = columnConfig.labelSource || 'alertLabels'
       const columnDisplayAnnotation = columnConfig.displayNameAnnotation
       const gridConfig = columnConfig.grids
-      const itemConfig = gridConfig?.items
+      const hasGrid = Boolean(gridConfig && gridConfig.label)
+      const gridLabel = gridConfig?.label
+      const gridLabelSource = gridConfig?.labelSource || 'alertLabels'
 
-      // Group alerts by column label with labelSource
-      const columnGroups = groupAlertsByLabel(alerts, columnLabel, columnLabelSource)
+      const columnGroups = new Map()
+
+      alerts.forEach(alert => {
+        const columnResolved = resolveLabelValue(alert, columnLabel, columnLabelSource)
+        if (columnResolved.skip) return
+
+        const columnValue = columnResolved.value
+        let columnEntry = columnGroups.get(columnValue)
+        if (!columnEntry) {
+          columnEntry = {
+            alerts: [],
+            grids: hasGrid ? new Map() : null
+          }
+          columnGroups.set(columnValue, columnEntry)
+        }
+
+        columnEntry.alerts.push(alert)
+
+        if (hasGrid) {
+          const gridResolved = resolveLabelValue(alert, gridLabel, gridLabelSource)
+          if (gridResolved.skip) return
+
+          const gridValue = gridResolved.value
+          const grids = columnEntry.grids
+          let gridAlerts = grids.get(gridValue)
+          if (!gridAlerts) {
+            gridAlerts = []
+            grids.set(gridValue, gridAlerts)
+          }
+          gridAlerts.push(alert)
+        }
+      })
 
       const sortedColumnEntries = Array.from(columnGroups.entries()).sort(([a], [b]) => sortKeys(a, b))
 
-      sortedColumnEntries.forEach(([columnValue, columnAlerts]) => {
+      sortedColumnEntries.forEach(([columnValue, columnEntry]) => {
+        const columnAlerts = columnEntry.alerts
         const column = {
           type: 'column',
           label: columnLabel,
@@ -471,43 +605,24 @@ export const usePrometheusStore = defineStore('prometheus', () => {
           grids: []
         }
 
-        if (gridConfig && gridConfig.label) {
+        if (hasGrid) {
           // Group by grid label with labelSource
-          const gridLabelSource = gridConfig.labelSource || 'alertLabels'
           const gridDisplayAnnotation = gridConfig.displayNameAnnotation
-          const gridGroups = groupAlertsByLabel(columnAlerts, gridConfig.label, gridLabelSource)
+          const gridGroups = columnEntry.grids
 
           const sortedGridEntries = Array.from(gridGroups.entries()).sort(([a], [b]) => sortKeys(a, b))
 
           sortedGridEntries.forEach(([gridValue, gridAlerts]) => {
             const grid = {
               type: 'grid',
-              label: gridConfig.label,
+              label: gridLabel,
               value: gridValue,
               displayValue: getDisplayValue(gridAlerts, gridValue, gridDisplayAnnotation),
               state: getAggregatedState(gridAlerts) // Add aggregated state for grid
             }
 
-            if (itemConfig && itemConfig.label) {
-              // Has item config: Group by item label with labelSource
-              const itemLabelSource = itemConfig.labelSource || 'alertLabels'
-              const itemGroups = groupAlertsByLabel(gridAlerts, itemConfig.label, itemLabelSource)
-
-              grid.items = []
-              const sortedItemEntries = Array.from(itemGroups.entries()).sort(([a], [b]) => sortKeys(a, b))
-              sortedItemEntries.forEach(([itemValue, itemAlerts]) => {
-                grid.items.push({
-                  type: 'item',
-                  label: itemConfig.label,
-                  value: itemValue,
-                  alerts: itemAlerts,
-                  state: getAggregatedState(itemAlerts)
-                })
-              })
-            } else {
-              // No item config: grid directly contains alerts (no item grouping)
-              grid.alerts = gridAlerts
-            }
+            // Grid directly contains alerts (no item grouping)
+            grid.alerts = gridAlerts
 
             column.grids.push(grid)
           })
@@ -516,21 +631,7 @@ export const usePrometheusStore = defineStore('prometheus', () => {
           column.grids.push({
             type: 'grid',
             state: getAggregatedState(columnAlerts), // Add aggregated state for grid
-            alerts: columnAlerts,
-            items: columnAlerts.map(alert => {
-              // Try to find a suitable value for display
-              const itemValue = alert.labels?.instance ||
-                               alert.labels?.job ||
-                               alert.labels?.alertname ||
-                               'unknown'
-
-              return {
-                type: 'item',
-                value: itemValue,
-                alerts: [alert],
-                state: alert.state
-              }
-            })
+            alerts: columnAlerts
           })
         }
 

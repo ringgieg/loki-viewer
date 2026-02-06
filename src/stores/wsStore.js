@@ -3,7 +3,11 @@ import { ref } from 'vue'
 import { tailLogs, buildTaskQuery } from '../api/loki'
 import { useAlertStore } from './alertStore'
 import { useTaskStore } from './taskStore'
-import { getCurrentServiceConfig, getLogLevelMapping } from '../utils/config'
+import {
+  getCurrentServiceConfig,
+  getLogLevelMapping,
+  isAlertLevelEnabled
+} from '../utils/config'
 
 /**
  * Check if a log level should trigger an alert based on configured alert level and mapping
@@ -56,7 +60,11 @@ export const useWsStore = defineStore('ws', () => {
     const query = buildTaskQuery(null)
 
     // Get configured alert level
-    const alertLevel = getCurrentServiceConfig('alert.level', 'ERROR')
+    const alertLevelConfigured = isAlertLevelEnabled()
+    const rawAlertLevel = alertLevelConfigured ? getCurrentServiceConfig('alert.level', null) : null
+    const alertLevel = typeof rawAlertLevel === 'string'
+      ? rawAlertLevel.trim().toUpperCase()
+      : rawAlertLevel
 
     wsController = tailLogs(query, {
       onLog: (logs) => {
@@ -66,7 +74,7 @@ export const useWsStore = defineStore('ws', () => {
           const level = (log.level || 'INFO').toUpperCase()
 
           // Skip alert triggering during initial connection to avoid false alerts
-          if (!isInitializing && shouldTriggerAlert(level, alertLevel) && taskName) {
+          if (!isInitializing && alertLevelConfigured && shouldTriggerAlert(level, alertLevel) && taskName) {
             const isWatched = taskStore.watchedTasks.has(taskName)
 
             console.log(`${level} log detected for task: ${taskName} (watched: ${isWatched}, alert level: ${alertLevel})`)
@@ -96,7 +104,7 @@ export const useWsStore = defineStore('ws', () => {
 
         // Delay marking initialization as complete to allow initial historical logs to load
         // This prevents false alerts from historical logs on page load
-        const delay = getCurrentServiceConfig('websocket.initializationDelay', 2000)
+        const delay = getCurrentServiceConfig('loki.websocket.initializationDelay', 2000)
         setTimeout(() => {
           isInitializing = false
           console.log('Initialization complete, now monitoring for new errors')
@@ -107,7 +115,7 @@ export const useWsStore = defineStore('ws', () => {
         const serviceName = getCurrentServiceConfig('loki.fixedLabels.service', 'service')
         console.log(`WebSocket disconnected from service: ${serviceName}, hadConnection:`, hadConnection)
         // Trigger disconnect alert only if we had a connection before
-        if (hadConnection) {
+        if (hadConnection && alertLevelConfigured) {
           console.log('Triggering disconnect alert')
           alertStore.triggerAlert('disconnect')
           console.log('Alert store hasAlert:', alertStore.hasAlert)

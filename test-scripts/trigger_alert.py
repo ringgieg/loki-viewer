@@ -14,7 +14,7 @@ from datetime import datetime
 DEFAULT_TASK_NAME = "test_task"
 DEFAULT_COUNT = 10
 DEFAULT_LEVEL = "MIXED"
-DEFAULT_LOKI_URL = "http://localhost:3100"
+DEFAULT_LOKI_URL = "http://127.0.0.1:3100"
 
 # Log level configurations
 LOG_LEVELS = {

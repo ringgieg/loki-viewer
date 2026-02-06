@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useServiceStore } from './serviceStore'
-import { getAlertmanagerAlertMuteMinutes } from '../utils/config'
+import { getAlertMuteMinutes, getAlertmanagerAlertMuteMinutes } from '../utils/config'
 
 const MUTE_STORAGE_KEY_PREFIX = 'dashboard-mute-until'
 const AM_MUTE_STORAGE_KEY_PREFIX = 'dashboard-am-muted-fingerprints'
@@ -165,6 +165,11 @@ export const useAlertStore = defineStore('alert', () => {
       muteAlertmanagerFingerprints(Array.from(alertFingerprints.value))
     }
     alertFingerprints.value = new Set()
+
+    const muteMinutes = getAlertMuteMinutes()
+    if (!isMuted.value && typeof muteMinutes === 'number' && muteMinutes > 0) {
+      setMute(muteMinutes)
+    }
   }
 
   /**

@@ -6,7 +6,7 @@ import {
 } from '../utils/config'
 
 /**
- * Retry wrapper with exponential backoff
+ * Retry wrapper with fixed delay
  */
 async function retryWithBackoff(fn, maxRetries = null, baseDelay = null) {
   const finalMaxRetries = maxRetries ?? getPrometheusMaxRetries()
@@ -20,7 +20,7 @@ async function retryWithBackoff(fn, maxRetries = null, baseDelay = null) {
       const isServerError = error.response?.status >= 500
 
       if ((isTooManyRequests || isServerError) && i < finalMaxRetries - 1) {
-        const delay = finalBaseDelay * Math.pow(2, i)
+        const delay = finalBaseDelay
         console.log(`[Prometheus] Request failed, retrying in ${delay}ms...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       } else {

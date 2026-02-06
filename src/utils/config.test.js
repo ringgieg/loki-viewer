@@ -48,14 +48,14 @@ describe('config.js', () => {
 
     it('should return nested config value using dot notation', () => {
       window.APP_CONFIG = {
-        websocket: {
-          maxReconnectAttempts: 5,
-          reconnectDelay: 3000
+        loki: {
+          websocket: {
+            reconnectDelay: 3000
+          }
         }
       }
 
-      expect(getConfig('websocket.maxReconnectAttempts')).toBe(5)
-      expect(getConfig('websocket.reconnectDelay')).toBe(3000)
+      expect(getConfig('loki.websocket.reconnectDelay')).toBe(3000)
     })
 
     it('should return deeply nested config value', () => {
@@ -105,7 +105,7 @@ describe('config.js', () => {
         pageTitle: 'Batch-Sync'
       }
 
-      expect(getConfig('websocket.maxReconnectAttempts', 10)).toBe(10)
+      expect(getConfig('loki.websocket.reconnectDelay', 3000)).toBe(3000)
     })
 
     it('should return undefined when no fallback provided for missing key', () => {

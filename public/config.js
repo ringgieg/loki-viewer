@@ -28,41 +28,36 @@ window.APP_CONFIG = {
       loki: {
         // API 配置
         apiBasePath: '/loki/api/v1',              // 可选，默认值：'/loki/api/v1'
-
-        // WebSocket 连接配置（可选，留空则自动检测）
-        wsProtocol: '',                           // 可选，默认值：自动检测（'ws' ?'wss'?
-        wsHost: '',                               // 可选，默认值：window.location.host
-
-        // WebSocket 尾部日志参数
-        tailLimit: 100,                           // 可选，默认值：100（尾部日志数量）
-        tailDelayFor: '0',                        // 可选，默认值：'0'（尾部日志延迟）
-
-        // API 重试设置
-        maxRetries: 3,                            // 可选，默认值：3（最大重试次数）
-        retryBaseDelay: 1000,                     // 可选，默认值：1000（指数退避基础延迟，毫秒）
+        // WebSocket host/protocol follows apiBasePath
+        websocket: {
+          reconnectDelay: 3000, // optional: reconnect delay (ms)
+          initializationDelay: 2000 // optional: delay before alerts (ms)
+        },
+        api: {
+          tailLimit: 100,
+          tailDelayFor: '0',
+          maxRetries: 3,
+          retryBaseDelay: 1000
+        },
 
         // Loki 查询标签（必需?
         fixedLabels: {                            // 必需：固定查询标?
           job: 'tasks',
           service: 'Batch-Sync'
         },
-        taskLabel: 'task_name'                    // 可选，默认值：'task_name'（任务标签字段名?
+        taskLabel: 'task_name',                    // 可选，默认值：'task_name'（任务标签字段名?
+        
       },
 
       // ========== 日志显示配置 ==========
       defaultLogLevel: 'WARN',                    // 可选，默认值：''（默认显示的日志级别?
       logsPerPage: 500,                           // 可选，默认值：500（每页显示日志条数）
 
-      // ========== WebSocket 连接配置 ==========
-      websocket: {
-        maxReconnectAttempts: 5,                  // 可选，默认值：5（最大重连次数）
-        reconnectDelay: 3000,                     // 可选，默认值：3000（重连延迟，毫秒?
-        initializationDelay: 2000                 // 可选，默认值：2000（监控开始前延迟，毫秒）
-      },
 
       // ========== 告警配置 ==========
       alert: {
         level: 'ERROR',                           // 可选，默认值：'ERROR'（告警级别：ERROR/WARN/INFO/DEBUG?
+        alertMuteMinutes: 10,
         newLogHighlightDuration: 3000             // 可选，默认值：3000（新日志高亮持续时间，毫秒）
       },
 
@@ -72,70 +67,7 @@ window.APP_CONFIG = {
       },
 
       // ========== 日志级别配置 ==========
-      logLevels: {                                // 可选，有完整默认配?
-        order: ['ERROR', 'WARN', 'INFO', 'DEBUG'], // 级别顺序（从高到低）
-        mapping: {                                 // 级别映射：告警级??触发的日志级?
-          'ERROR': ['ERROR'],
-          'WARN': ['ERROR', 'WARN'],
-          'INFO': ['ERROR', 'WARN', 'INFO'],
-          'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
-        }
-      }
-    },
-    {
-      // ========== 服务基本信息 ==========
-      id: 'data-service',                         // 必需：服务唯一标识?
-      displayName: 'Data Service',                // 必需：服务显示名?
-      type: 'loki-multitask', 
-
-      // ========== Loki 连接配置 ==========
-      loki: {
-        apiBasePath: '/loki/api/v1',              // 可选，默认值：'/loki/api/v1'
-        wsProtocol: '',                           // 可选，默认值：自动检?
-        wsHost: '',                               // 可选，默认值：window.location.host
-        tailLimit: 100,                           // 可选，默认值：100
-        tailDelayFor: '0',                        // 可选，默认值：'0'
-        maxRetries: 3,                            // 可选，默认值：3
-        retryBaseDelay: 1000,                     // 可选，默认值：1000
-        fixedLabels: {                            // 必需：固定查询标?
-          job: 'api',
-          service: 'Data-Service'
-        },
-        taskLabel: 'endpoint'                     // 可选，默认值：'task_name'
-      },
-
-      // ========== 日志显示配置 ==========
-      defaultLogLevel: 'WARN',                    // 可选，默认值：''
-      logsPerPage: 1000,                          // 可选，默认值：500
-
-      // ========== WebSocket 连接配置 ==========
-      websocket: {
-        maxReconnectAttempts: 5,                  // 可选，默认值：5
-        reconnectDelay: 3000,                     // 可选，默认值：3000
-        initializationDelay: 2000                 // 可选，默认值：2000
-      },
-
-      // ========== 告警配置 ==========
-      alert: {
-        level: 'ERROR',                           // 可选，默认值：'ERROR'
-        newLogHighlightDuration: 3000             // 可选，默认值：3000
-      },
-
-      // ========== 查询配置 ==========
-      query: {
-        defaultTimeRangeDays: 30                  // 可选，默认值：7
-      },
-
-      // ========== 日志级别配置 ==========
-      logLevels: {                                // 可选，有完整默认配?
-        order: ['ERROR', 'WARN', 'INFO', 'DEBUG'],
-        mapping: {
-          'ERROR': ['ERROR'],
-          'WARN': ['ERROR', 'WARN'],
-          'INFO': ['ERROR', 'WARN', 'INFO'],
-          'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
-        }
-      }
+      logLevels: ['ERROR', 'WARN', 'INFO', 'DEBUG'] // 可选，有完整默认配?
     },
     {
       // ========== Prometheus 告警监控服务 ==========
@@ -143,38 +75,56 @@ window.APP_CONFIG = {
       displayName: 'Prometheus Dashboard',           // 必需：服务显示名?
       type: 'prometheus-multitask',               // 必需：服务类?
 
+      // ========== 告警配置 ==========
+      alert: {
+        level: 'warning',                          // 可选，默认值：'ERROR'（告警级别：ERROR/WARN/INFO/DEBUG?
+        alertMuteMinutes: 1
+      },
+
+      // ========== Alertmanager 配置 ==========
+      alertmanager: {
+        basePath: 'http://127.0.0.1:9093/api/v2', // Alertmanager API base path (optional)
+        receiver: 'critical-receiver',                        // Alertmanager receiver name for global alerts
+        alertMuteMinutes: 10                                // Mute duration after user dismiss (minutes)
+      },
+
+      // 轮询配置
+      polling: {
+        interval: 5000                          // 可选，默认值：5000（轮询间隔，毫秒?
+      },
+
       // ========== Prometheus 连接配置 ==========
       prometheus: {
-        // API 配置（使用统一告警端点?
+        // API 配置（使用统一告警端点）
         apiBasePath: 'http://127.0.0.1:8880/api/v1',       // 统一告警 API 地址
-        alertmanagerBasePath: 'http://127.0.0.1:9093/api/v2', // Alertmanager API base path (optional)
-        alertmanagerReceiver: 'critical-receiver',                        // Alertmanager receiver name for global alerts
-        alertmanagerAlertMuteMinutes: 10,                // Mute duration after user dismiss (minutes)
 
         // 任务标签（左侧任务列表）
         taskLabel: 'job',
 
         severityLevels: ['critical', 'warning'],
         severityLabel: 'severity',
+        // alert: {
+        //   level: 'critical'
+        // },
 
         // 固定过滤标签（可选）
-        // 例如：只显示特定环境的告?
+        // 例如：只显示特定环境的告警
         fixedLabels: {                            // 可选，默认值：{}
           // env: 'production'                    // 取消注释以过滤特定环?
         },
 
         // 监控链路配置（E2E 监控链路健康检查）
-        // 配置 alertName 即为启用，不配置或留空即为禁?
+        // 配置 alertName 即为启用，不配置或留空即为禁用
         deadManSwitch: {
           alertName: 'PrometheusAlertmanagerE2eDeadManSwitch'  // 监控链路告警名称（此告警持续 firing 表示监控链路正常?
         },
 
         // 层级配置（右侧面板）
         // 如果为空数组 []，则显示扁平的告警列?
-        // 如果配置?columns，则按层级显示（Column ?Grid ?Item?
+        // 如果配置了columns，则按层级显示（Column -> Grid）
         columns: [                                // 可选，默认值：[]
           {
-            label: 'instance',                    // Column 层级?label (按实例分?
+            label: 'instance',                    // Column 层级->label (按实例分?
             displayNameAnnotation: null,          // 可选：如果配置了且 annotation 存在，优先显?annotation ?
             grids: {
               label: 'name',                  // Grid 层级?label (按实例分?
@@ -182,49 +132,24 @@ window.APP_CONFIG = {
               highlightAnnotations: ['summary', 'description'],
               muteexclaudelabel: [],
               muteIncludeLabels: [],
-              // items: {
-              //   label: 'alertname'                // Item 层级?label (按告警名称分?
-              // }
             }
           }
         ],
 
-        // 扁平显示模式（调试用，已注释?
-        // columns: [],
-
-        // 场景1 示例：severity ?alertname
-        // columns: [
-        //   {
-        //     label: 'severity',
-        //     grids: {
-        //       label: 'alertname',
-        //       displayNameAnnotation: 'summary'
-        //     }
-        //   }
-        // ],
-
-        // 轮询配置
-        polling: {
-          interval: 5000                          // 可选，默认值：5000（轮询间隔，毫秒?
-        },
-
-        // 重试设置
-        maxRetries: 3,                            // 可选，默认值：3
-        retryBaseDelay: 1000                      // 可选，默认值：1000
       }
     },
     {
-      // ========== 外部链接服务（新窗口打开?=========
-      id: 'grafana-dashboard',                    // 必需：服务唯一标识?
-      displayName: 'Grafana 仪表?',              // 必需：服务显示名?
-      type: 'external-link',                      // 必需：服务类型（external-link?
-      externalUrl: 'http://127.0.0.1:3000'       // 必需：外部链?URL（Grafana 默认端口 3000?
+      // ========== 外部链接服务（新窗口打开）=========
+      id: 'grafana-dashboard',                    // 必需：服务唯一标识
+      displayName: 'Grafana 仪表盘',              // 必需：服务显示名
+      type: 'external-link',                      // 必需：服务类型（external-link）
+      externalUrl: 'http://127.0.0.1:3000'       // 必需：外部链URL（Grafana 默认端口 3000）
     },
     {
       // ========== 外部链接服务示例 2 ==========
-      id: 'alertmanager-ui',                      // 必需：服务唯一标识?
-      displayName: 'Alertmanager UI',             // 必需：服务显示名?
-      type: 'external-link',                      // 必需：服务类?
+      id: 'alertmanager-ui',                      // 必需：服务唯一标识
+      displayName: 'Alertmanager UI',             // 必需：服务显示名
+      type: 'external-link',                      // 必需：服务类型（external-link）
       externalUrl: 'http://127.0.0.1:9093'       // 必需：Alertmanager UI URL
     }
   ],

@@ -12,25 +12,24 @@ const defaultConfig = {
       displayName: 'Batch-Sync Service',
       loki: {
         apiBasePath: '/loki/api/v1',
-        wsProtocol: '',
-        wsHost: '',
-        tailLimit: 100,
-        tailDelayFor: '0',
-        maxRetries: 3,
-        retryBaseDelay: 1000,
+        api: {
+          tailLimit: 100,
+          tailDelayFor: '0',
+          maxRetries: 3,
+          retryBaseDelay: 1000
+        },
         fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
         },
-        taskLabel: 'task_name'
+        taskLabel: 'task_name',
+        websocket: {
+          reconnectDelay: 3000,
+          initializationDelay: 2000
+        }
       },
       defaultLogLevel: '',
       logsPerPage: 500,
-      websocket: {
-        maxReconnectAttempts: 5,
-        reconnectDelay: 3000,
-        initializationDelay: 2000
-      },
       alert: {
         level: 'ERROR',
         newLogHighlightDuration: 3000
@@ -38,40 +37,31 @@ const defaultConfig = {
       query: {
         defaultTimeRangeDays: 7
       },
-      logLevels: {
-        order: ['ERROR', 'WARN', 'INFO', 'DEBUG'],
-        mapping: {
-          'ERROR': ['ERROR'],
-          'WARN': ['ERROR', 'WARN'],
-          'INFO': ['ERROR', 'WARN', 'INFO'],
-          'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
-        }
-      }
+      logLevels: ['ERROR', 'WARN', 'INFO', 'DEBUG']
     },
     {
       id: 'data-service',
       displayName: 'Data Service',
       loki: {
         apiBasePath: '/loki/api/v1',
-        wsProtocol: '',
-        wsHost: '',
-        tailLimit: 100,
-        tailDelayFor: '0',
-        maxRetries: 3,
-        retryBaseDelay: 1000,
+        api: {
+          tailLimit: 100,
+          tailDelayFor: '0',
+          maxRetries: 3,
+          retryBaseDelay: 1000
+        },
         fixedLabels: {
           job: 'api',
           service: 'Data-Service'
         },
-        taskLabel: 'endpoint'
+        taskLabel: 'endpoint',
+        websocket: {
+          reconnectDelay: 3000,
+          initializationDelay: 2000
+        }
       },
       defaultLogLevel: 'WARN',
       logsPerPage: 1000,
-      websocket: {
-        maxReconnectAttempts: 5,
-        reconnectDelay: 3000,
-        initializationDelay: 2000
-      },
       alert: {
         level: 'ERROR',
         newLogHighlightDuration: 3000
@@ -90,7 +80,7 @@ const defaultConfig = {
 
 /**
  * Get configuration value with fallback
- * @param {string} path - Dot-separated path (e.g., 'websocket.reconnectDelay')
+ * @param {string} path - Dot-separated path (e.g., 'loki.websocket.reconnectDelay')
  * @param {*} fallback - Fallback value if path not found
  * @returns {*} Configuration value
  */
@@ -254,12 +244,110 @@ export function getCurrentServiceConfig(path, fallback) {
   return getServiceConfig(serviceId, path, fallback)
 }
 
+function hasConfigPath(target, path) {
+  if (!target || !path) return false
+  const keys = path.split('.')
+  let value = target
+
+  for (const key of keys) {
+    if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, key)) {
+      value = value[key]
+    } else {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Check whether the current service has a config path explicitly defined
+ * (only considers window.APP_CONFIG, does not fall back to default config)
+ * @param {string} path - Dot-separated path
+ * @returns {boolean} True if path exists on current service config
+ */
+export function hasCurrentServiceConfig(path) {
+  if (!path) return false
+  const config = window.APP_CONFIG
+  if (!config || !Array.isArray(config.services)) return false
+
+  const serviceId = getCurrentServiceId()
+  const service = config.services.find(s => s.id === serviceId)
+  if (!service) return false
+
+  return hasConfigPath(service, path)
+}
+
+/**
+ * Check if alert.level is explicitly configured and enabled for current service
+ * @returns {boolean} True if alert.level is configured and non-empty
+ */
+export function isAlertLevelEnabled() {
+  if (!hasCurrentServiceConfig('alert.level')) return false
+  const value = getCurrentServiceConfig('alert.level', null)
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+  return value !== null && value !== undefined
+}
+
+/**
+ * Get alert mute duration in minutes for current service
+ * @returns {number} Mute duration in minutes (default: 0)
+ */
+export function getAlertMuteMinutes() {
+  return getCurrentServiceConfig('alert.alertMuteMinutes', 0)
+}
+
+/**
+ * Check if Prometheus alert.level is explicitly configured and enabled for current service
+ * @returns {boolean} True if prometheus.alert.level is configured and non-empty
+ */
+export function isPrometheusAlertLevelEnabled() {
+  if (!hasCurrentServiceConfig('prometheus.alert.level')) return false
+  const value = getCurrentServiceConfig('prometheus.alert.level', null)
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+  return value !== null && value !== undefined
+}
+
+/**
+ * Get Prometheus alert level for current service
+ * @returns {string} Alert level value (default: '')
+ */
+export function getPrometheusAlertLevel() {
+  return getCurrentServiceConfig('prometheus.alert.level', '')
+}
+
 /**
  * Get log level order for current service
  * @returns {Array<string>} Log level order (e.g., ['ERROR', 'WARN', 'INFO', 'DEBUG'])
  */
+const DEFAULT_LOG_LEVEL_ORDER = ['ERROR', 'WARN', 'INFO', 'DEBUG']
+
+function buildLogLevelMappingFromOrder(order) {
+  const normalizedOrder = Array.isArray(order) && order.length > 0
+    ? order
+    : DEFAULT_LOG_LEVEL_ORDER
+
+  const mapping = {}
+  for (let i = 0; i < normalizedOrder.length; i++) {
+    const level = normalizedOrder[i]
+    mapping[level] = normalizedOrder.slice(0, i + 1)
+  }
+  return mapping
+}
+
 export function getLogLevelOrder() {
-  return getCurrentServiceConfig('logLevels.order', ['ERROR', 'WARN', 'INFO', 'DEBUG'])
+  const logLevels = getCurrentServiceConfig('logLevels', null)
+  if (Array.isArray(logLevels)) {
+    return logLevels
+  }
+  if (logLevels && Array.isArray(logLevels.order)) {
+    return logLevels.order
+  }
+  return getCurrentServiceConfig('logLevels.order', DEFAULT_LOG_LEVEL_ORDER)
 }
 
 /**
@@ -267,12 +355,17 @@ export function getLogLevelOrder() {
  * @returns {Object} Log level mapping (e.g., { 'ERROR': ['ERROR'], 'WARN': ['ERROR', 'WARN'], ... })
  */
 export function getLogLevelMapping() {
-  return getCurrentServiceConfig('logLevels.mapping', {
-    'ERROR': ['ERROR'],
-    'WARN': ['ERROR', 'WARN'],
-    'INFO': ['ERROR', 'WARN', 'INFO'],
-    'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
-  })
+  const logLevels = getCurrentServiceConfig('logLevels', null)
+  if (logLevels && !Array.isArray(logLevels) && logLevels.mapping) {
+    return logLevels.mapping
+  }
+
+  const mapping = getCurrentServiceConfig('logLevels.mapping', null)
+  if (mapping) {
+    return mapping
+  }
+
+  return buildLogLevelMappingFromOrder(getLogLevelOrder())
 }
 
 /**
@@ -362,6 +455,18 @@ export function getPrometheusApiBasePath() {
  * @returns {string} Alertmanager API base path (default: '/alertmanager/api/v2')
  */
 export function getAlertmanagerApiBasePath() {
+  const basePath = getCurrentServiceConfig('alertmanager.basePath', null)
+  if (basePath !== null && basePath !== undefined) {
+    if (typeof basePath === 'string') {
+      const trimmed = basePath.trim()
+      if (trimmed) {
+        return trimmed
+      }
+    } else {
+      return basePath
+    }
+  }
+
   return getCurrentServiceConfig('prometheus.alertmanagerBasePath', '/alertmanager/api/v2')
 }
 
@@ -370,8 +475,8 @@ export function getAlertmanagerApiBasePath() {
  * @returns {Array<string>} Receiver names (default: [])
  */
 export function getAlertmanagerReceivers() {
-  const receiverConfig = getCurrentServiceConfig('prometheus.alertmanagerReceiver', null)
-  const receiversConfig = getCurrentServiceConfig('prometheus.alertmanagerReceivers', null)
+  const receiverConfig = getCurrentServiceConfig('alertmanager.receiver', null)
+  const receiversConfig = getCurrentServiceConfig('alertmanager.receivers', null)
 
   const normalize = (value) => {
     if (Array.isArray(value)) {
@@ -388,7 +493,18 @@ export function getAlertmanagerReceivers() {
   if (receivers.length > 0) {
     return receivers
   }
-  return normalize(receiverConfig)
+
+  const receiver = normalize(receiverConfig)
+  if (receiver.length > 0) {
+    return receiver
+  }
+
+  const legacyReceivers = normalize(getCurrentServiceConfig('prometheus.alertmanagerReceivers', null))
+  if (legacyReceivers.length > 0) {
+    return legacyReceivers
+  }
+
+  return normalize(getCurrentServiceConfig('prometheus.alertmanagerReceiver', null))
 }
 
 /**
@@ -420,6 +536,10 @@ export function getPrometheusColumns() {
  * @returns {number} Polling interval in milliseconds (default: 5000)
  */
 export function getPrometheusPollingInterval() {
+  const value = getCurrentServiceConfig('polling.interval', null)
+  if (value !== null && value !== undefined) {
+    return value
+  }
   return getCurrentServiceConfig('prometheus.polling.interval', 5000)
 }
 
@@ -478,5 +598,9 @@ export function getPrometheusSeverityLabel() {
  * @returns {number} Mute duration in minutes (default: 10)
  */
 export function getAlertmanagerAlertMuteMinutes() {
+  const value = getCurrentServiceConfig('alertmanager.alertMuteMinutes', null)
+  if (value !== null && value !== undefined) {
+    return value
+  }
   return getCurrentServiceConfig('prometheus.alertmanagerAlertMuteMinutes', 10)
 }

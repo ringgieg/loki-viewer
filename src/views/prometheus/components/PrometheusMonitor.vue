@@ -300,10 +300,6 @@
             </div>
 
             <div class="dialog-alert-body">
-              <!-- Debug: Alert object structure -->
-              <div v-if="false" class="debug-section">
-                <pre>{{ JSON.stringify(alert, null, 2) }}</pre>
-              </div>
 
               <div v-if="alert.annotations && Object.keys(alert.annotations).length > 0" class="detail-section">
                 <div class="detail-title">Annotations</div>
@@ -447,9 +443,6 @@ const hiddenAnnotationKeys = computed(() => {
   const gridConfig = columnConfig.grids || null
   if (gridConfig) {
     addKey(gridConfig.displayNameAnnotation)
-    if (gridConfig.items) {
-      addKey(gridConfig.items.displayNameAnnotation)
-    }
   }
 
   return keys
@@ -590,15 +583,6 @@ function getAlertmanagerTagLabel(alert) {
 
 function getGridAlerts(grid) {
   if (!grid) return []
-  if (grid.items) {
-    const alerts = []
-    grid.items.forEach(item => {
-      if (item.alerts) {
-        alerts.push(...item.alerts)
-      }
-    })
-    return alerts
-  }
   if (grid.alerts) {
     return grid.alerts
   }
@@ -746,30 +730,31 @@ function getCommonLabelEntriesForGrid(grid, column) {
   const excluded = new Set(getMuteExcludeLabelsForColumn(column))
   const entries = []
 
-  keys.forEach(key => {
-    if (!key || excluded.has(key)) return
+  for (const key of keys) {
+    if (!key || excluded.has(key)) continue
     let commonValue = null
     let isCommon = true
 
-    alerts.forEach(alert => {
+    for (const alert of alerts) {
       const value = alert?.labels?.[key]
       if (value == null) {
         isCommon = false
-        return
+        break
       }
       if (commonValue == null) {
         commonValue = value
-        return
+        continue
       }
       if (String(commonValue) !== String(value)) {
         isCommon = false
+        break
       }
-    })
+    }
 
     if (isCommon && commonValue != null && String(commonValue).length > 0) {
       entries.push([key, commonValue])
     }
-  })
+  }
 
   Object.entries(fixedLabels.value || {}).forEach(([key, value]) => {
     if (!key || excluded.has(key)) return
@@ -831,10 +816,6 @@ async function handleSilenceCreated() {
 
 // Get total alert count in a grid
 function getGridAlertCount(grid) {
-  // If grid has items, count alerts in items
-  if (grid.items) {
-    return grid.items.reduce((sum, item) => sum + (item.alerts?.length || 0), 0)
-  }
   // If grid has alerts directly, count them
   if (grid.alerts) {
     return grid.alerts.length
@@ -846,20 +827,9 @@ function getGridAlertCount(grid) {
 const sortedGridAlerts = computed(() => {
   if (!selectedGrid.value) return []
 
-  let allAlerts = []
-
-  // If grid has items, collect alerts from items
-  if (selectedGrid.value.items) {
-    selectedGrid.value.items.forEach(item => {
-      if (item.alerts) {
-        allAlerts.push(...item.alerts)
-      }
-    })
-  }
-  // If grid has alerts directly, use them
-  else if (selectedGrid.value.alerts) {
-    allAlerts = [...selectedGrid.value.alerts]
-  }
+  const allAlerts = Array.isArray(selectedGrid.value.alerts)
+    ? [...selectedGrid.value.alerts]
+    : []
 
   // Sort: firing first, then pending, then inactive
   return allAlerts.sort((a, b) => {

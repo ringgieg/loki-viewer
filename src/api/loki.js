@@ -2,15 +2,24 @@ import axios from 'axios'
 import { getConfig, getCurrentServiceConfig, getLogLevelRegex, getLogLevelOrder } from '../utils/config'
 
 // Use nginx proxy for WebSocket connections
-// Automatically uses wss:// for HTTPS and ws:// for HTTP
+// WebSocket protocol/host/path follows the Loki API base path
 function getWebSocketUrl() {
-  const wsProtocol = getCurrentServiceConfig('loki.wsProtocol') ||
-    getConfig('loki.wsProtocol') ||
-    (window.location.protocol === 'https:' ? 'wss' : 'ws')
-  const wsHost = getCurrentServiceConfig('loki.wsHost') ||
-    getConfig('loki.wsHost') ||
-    window.location.host
-  return `${wsProtocol}://${wsHost}`
+  const apiBasePath = getCurrentServiceConfig('loki.apiBasePath') ||
+    getConfig('loki.apiBasePath', '/loki/api/v1')
+
+  let baseUrl
+  try {
+    baseUrl = new URL(apiBasePath, window.location.origin)
+  } catch (e) {
+    baseUrl = new URL('/loki/api/v1', window.location.origin)
+  }
+
+  const isHttps = baseUrl.protocol === 'https:'
+  const wsProtocol = isHttps ? 'wss' : 'ws'
+  const wsHost = baseUrl.host || window.location.host
+  const wsPath = baseUrl.pathname.replace(/\/$/, '')
+
+  return `${wsProtocol}://${wsHost}${wsPath}`
 }
 
 function getLokiApiBase() {
@@ -30,8 +39,8 @@ let logIdCounter = 0
  */
 async function retryWithBackoff(fn, maxRetries = null, baseDelay = null) {
   // Get retry settings from config or use defaults
-  const configMaxRetries = getCurrentServiceConfig('loki.maxRetries', 3)
-  const configBaseDelay = getCurrentServiceConfig('loki.retryBaseDelay', 1000)
+  const configMaxRetries = getCurrentServiceConfig('loki.api.maxRetries', 3)
+  const configBaseDelay = getCurrentServiceConfig('loki.api.retryBaseDelay', 1000)
 
   const finalMaxRetries = maxRetries ?? configMaxRetries
   const finalBaseDelay = baseDelay ?? configBaseDelay
@@ -134,8 +143,8 @@ export function tailLogs(query, callbacks = {}) {
   const { onLog, onError, onClose, onOpen } = callbacks
 
   // Get tail parameters from config
-  const tailLimit = getCurrentServiceConfig('loki.tailLimit', 100)
-  const tailDelayFor = getCurrentServiceConfig('loki.tailDelayFor', '0')
+  const tailLimit = getCurrentServiceConfig('loki.api.tailLimit', 100)
+  const tailDelayFor = getCurrentServiceConfig('loki.api.tailDelayFor', '0')
 
   const params = new URLSearchParams({
     query,
@@ -143,15 +152,14 @@ export function tailLogs(query, callbacks = {}) {
     limit: String(tailLimit)
   })
 
-  const wsUrl = `${getWebSocketUrl()}${getLokiApiBase()}/tail?${params.toString()}`
+  const wsUrl = `${getWebSocketUrl()}/tail?${params.toString()}`
 
   let ws = null
   let reconnectAttempts = 0
   let reconnectTimeout = null
   let isManualClose = false
   let isConnecting = false
-  const maxReconnectAttempts = getCurrentServiceConfig('websocket.maxReconnectAttempts', 5)
-  const reconnectDelay = getCurrentServiceConfig('websocket.reconnectDelay', 3000)
+  const reconnectDelay = getCurrentServiceConfig('loki.websocket.reconnectDelay', 3000)
 
   function cleanupWebSocket() {
     if (ws) {
@@ -218,9 +226,10 @@ export function tailLogs(query, callbacks = {}) {
         if (onClose) onClose(event)
 
         // Try to reconnect if not manually closed
-        if (!isManualClose && reconnectAttempts < maxReconnectAttempts) {
+        if (!isManualClose) {
           reconnectAttempts++
-          console.log(`[WebSocket] Reconnecting... attempt ${reconnectAttempts}/${maxReconnectAttempts}`)
+          console.log(`[WebSocket] Reconnecting... attempt ${reconnectAttempts}`)
+          if (reconnectTimeout) clearTimeout(reconnectTimeout)
           reconnectTimeout = setTimeout(connect, reconnectDelay)
         }
       }

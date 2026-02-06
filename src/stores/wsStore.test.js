@@ -34,7 +34,7 @@ describe('wsStore', () => {
           'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
         },
         'loki.fixedLabels.service': 'Test Service',
-        'websocket.initializationDelay': 100
+        'loki.websocket.initializationDelay': 100
       }
       return configs[path] ?? fallback
     })
@@ -46,6 +46,9 @@ describe('wsStore', () => {
       'INFO': ['ERROR', 'WARN', 'INFO'],
       'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
     })
+
+    // Mock alert level enabled
+    vi.spyOn(config, 'isAlertLevelEnabled').mockReturnValue(true)
 
     // Mock buildTaskQuery
     vi.spyOn(lokiApi, 'buildTaskQuery').mockReturnValue('mocked-query')
@@ -120,7 +123,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'websocket.initializationDelay') return 100
+        if (path === 'loki.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -165,7 +168,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'websocket.initializationDelay') return 100
+        if (path === 'loki.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -197,7 +200,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'websocket.initializationDelay') return 100
+        if (path === 'loki.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -225,7 +228,7 @@ describe('wsStore', () => {
       config.getCurrentServiceConfig.mockImplementation((path, fallback) => {
         if (path === 'alert.level') return 'WARN'
         if (path === 'logLevels.mapping') return null // No custom mapping
-        if (path === 'websocket.initializationDelay') return 100
+        if (path === 'loki.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -259,7 +262,7 @@ describe('wsStore', () => {
       config.getCurrentServiceConfig.mockImplementation((path, fallback) => {
         if (path === 'alert.level') return 'WARN'
         if (path === 'logLevels.mapping') return customMapping
-        if (path === 'websocket.initializationDelay') return 100
+        if (path === 'loki.websocket.initializationDelay') return 100
         return fallback
       })
 
@@ -426,7 +429,7 @@ describe('wsStore', () => {
             'DEBUG': ['ERROR', 'WARN', 'INFO', 'DEBUG']
           }
         }
-        if (path === 'websocket.initializationDelay') return 100
+        if (path === 'loki.websocket.initializationDelay') return 100
         return fallback
       })
 
