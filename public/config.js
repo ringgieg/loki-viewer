@@ -18,7 +18,7 @@ window.APP_CONFIG = {
   // 主题切换（可选）
   // 按北京时间自动切换：08:25 -> 白天模式，16:25 -> 黑夜模式
   themeSchedule: {
-    mode: 'auto',
+    mode: 'auto', // 可选：'auto'（自动切换）/ 'dark'（始终暗色）/ 'light'（始终亮色）
     timeZone: 'Asia/Shanghai',
     dayStart: '08:25',
     nightStart: '16:25'
