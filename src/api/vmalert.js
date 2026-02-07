@@ -49,10 +49,21 @@ export async function getAlerts() {
     if (response.data?.status === 'success') {
       const alerts = response.data.data?.alerts || []
 
-      // Enrich alerts: copy top-level 'name' field to labels for easier grouping
+      // Enrich alerts: copy top-level 'name' field to Prometheus-conventional label keys
+      // VMAlert unified endpoint returns the rule name as top-level `name`.
+      // Prometheus/Alertmanager expects it as label `alertname`.
       alerts.forEach(alert => {
-        if (alert.name && !alert.labels.name) {
-          alert.labels.name = alert.name
+        if (!alert || typeof alert !== 'object') return
+        if (!alert.labels || typeof alert.labels !== 'object') alert.labels = {}
+
+        if (alert.name) {
+          if (!alert.labels.alertname) {
+            alert.labels.alertname = alert.name
+          }
+          // Backward compatibility: some UIs/configs may still group by `name`
+          if (!alert.labels.name) {
+            alert.labels.name = alert.name
+          }
         }
       })
 

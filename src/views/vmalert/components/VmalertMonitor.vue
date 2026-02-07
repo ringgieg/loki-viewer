@@ -268,6 +268,16 @@
                     {{ getStateDisplayName(alert.state) }}
                   </el-tag>
                   <el-tag
+                    v-if="hasAlertValue(alert)"
+                    type="info"
+                    size="small"
+                    class="alert-value-tag"
+                    effect="plain"
+                    :title="`value: ${formatAlertValue(alert.value)}`"
+                  >
+                    v={{ formatAlertValue(alert.value) }}
+                  </el-tag>
+                  <el-tag
                     v-if="isAlertmanagerAlertSilenced(alert)"
                     type="warning"
                     size="small"
@@ -378,6 +388,19 @@ import {
 const route = useRoute()
 const prometheusStore = useVmalertStore()
 const linkify = new LinkifyIt()
+
+function hasAlertValue(alert) {
+  return Boolean(alert && (alert.value !== undefined && alert.value !== null))
+}
+
+function formatAlertValue(value) {
+  if (value === undefined || value === null) return ''
+  // Prometheus-style query result often uses [timestamp, stringValue]
+  if (Array.isArray(value) && value.length >= 2) {
+    return String(value[1])
+  }
+  return String(value)
+}
 
 const currentTask = computed(() => route.params.taskName || null)
 
@@ -1136,6 +1159,13 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.alert-value-tag {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alertmanager-tag {

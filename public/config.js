@@ -136,8 +136,9 @@ window.APP_CONFIG = {
             label: 'instance',                    // Column 层级->label (按实例分?
             displayNameAnnotation: null,          // 可选：如果配置了且 annotation 存在，优先显?annotation ?
             grids: {
-              label: 'name',                  // Grid 层级?label (按实例分?
-              displayNameAnnotation: 'name',
+              // Prometheus/Alertmanager conventional alert name label key
+              label: 'alertname',                 // Grid 层级 label（按告警名称分组）
+              displayNameAnnotation: null,
               highlightAnnotations: ['summary', 'description'],
               muteexclaudelabel: [],
               muteIncludeLabels: [],
