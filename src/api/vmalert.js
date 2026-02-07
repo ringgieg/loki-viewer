@@ -60,7 +60,7 @@ export async function getAlerts() {
           if (!alert.labels.alertname) {
             alert.labels.alertname = alert.name
           }
-          // Backward compatibility: some UIs/configs may still group by `name`
+          // Backward compatibility: some existing configs may still group by `name`
           if (!alert.labels.name) {
             alert.labels.name = alert.name
           }

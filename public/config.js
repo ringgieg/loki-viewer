@@ -138,7 +138,7 @@ window.APP_CONFIG = {
             grids: {
               // Prometheus/Alertmanager conventional alert name label key
               label: 'alertname',                 // Grid 层级 label（按告警名称分组）
-              displayNameAnnotation: null,
+              displayNameAnnotation: 'alertname',
               highlightAnnotations: ['summary', 'description'],
               muteexclaudelabel: [],
               muteIncludeLabels: [],

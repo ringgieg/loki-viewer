@@ -89,10 +89,10 @@
 
               <!-- Expanded detail -->
               <div v-if="expandedAlertIndex === `flat-${index}`" class="alert-detail-expanded">
-                <div v-if="alert.annotations && Object.keys(alert.annotations).length > 0" class="detail-section">
+                <div v-if="getSortedAnnotations(alert).length > 0" class="detail-section">
                   <div class="detail-title">Annotations</div>
                   <div class="annotations-list">
-                    <div v-for="([key, value], index) in Object.entries(alert.annotations).sort((a, b) => a[0].localeCompare(b[0]))" :key="index" class="annotation-item">
+                    <div v-for="([key, value], index) in getSortedAnnotations(alert)" :key="index" class="annotation-item">
                       <span class="annotation-key">{{ key }}:</span>
                       <span class="annotation-value" v-html="linkifyText(value)"></span>
                     </div>
@@ -261,13 +261,9 @@
             ]"
           >
             <div class="dialog-alert-header">
-              <div class="dialog-alert-name">{{ getAlertDisplayName(alert) }}</div>
-              <div class="dialog-alert-actions">
-                <div class="alert-summary-tags">
-                  <el-tag :type="getStateTagType(alert.state)" size="small">
-                    {{ getStateDisplayName(alert.state) }}
-                  </el-tag>
-                  <el-tag
+              <div class="dialog-alert-name">
+                {{ getAlertDisplayName(alert) }}
+                  <!-- <el-tag
                     v-if="hasAlertValue(alert)"
                     type="info"
                     size="small"
@@ -275,8 +271,16 @@
                     effect="plain"
                     :title="`value: ${formatAlertValue(alert.value)}`"
                   >
-                    v={{ formatAlertValue(alert.value) }}
+                    $v={{ formatAlertValue(alert.value) }}
+                  </el-tag> -->
+              </div>
+              <div class="dialog-alert-actions">
+                <div class="alert-summary-tags">
+                  
+                  <el-tag :type="getStateTagType(alert.state)" size="small">
+                    {{ getStateDisplayName(alert.state) }}
                   </el-tag>
+                  
                   <el-tag
                     v-if="isAlertmanagerAlertSilenced(alert)"
                     type="warning"
@@ -311,7 +315,7 @@
 
             <div class="dialog-alert-body">
 
-              <div v-if="alert.annotations && Object.keys(alert.annotations).length > 0" class="detail-section">
+              <div v-if="getSortedAnnotations(alert).length > 0" class="detail-section">
                 <div class="detail-title">Annotations</div>
                 <div class="annotations-list">
                   <div
@@ -949,12 +953,21 @@ function getSortedAnnotations(alert) {
   const highlighted = currentHighlightAnnotations.value
   const hiddenKeys = hiddenAnnotationKeys.value
 
+  const hasValue = (value) => {
+    if (value === undefined || value === null) return false
+    if (typeof value === 'string') return value.trim().length > 0
+    return String(value).trim().length > 0
+  }
+
   // Categorize annotations
   const highlightedAnnotations = []
   const normalAnnotations = []
 
   annotations.forEach(([key, value]) => {
     if (hiddenKeys.has(key)) {
+      return
+    }
+    if (!hasValue(value)) {
       return
     }
     const isHighlight = highlighted.includes(key)
