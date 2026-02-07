@@ -152,51 +152,69 @@
                     `grid-${grid.state}`,
                     'grid-clickable',
                     {
-                      'grid-alertmanager-match': hasAlertmanagerMatchForGrid(grid),
-                      'grid-alertmanager-silenced': hasAlertmanagerSilenceForGrid(grid)
+                      'grid-alertmanager-match': hasAlertmanagerMatchForGrid(grid) && !isSilencedFiringGrid(grid),
+                      'grid-alertmanager-silenced': isSilencedFiringGrid(grid)
                     }
                   ]"
                   @click="openGridDialog(grid, column)"
                 >
-                  <div class="grid-header">
-                    <div class="grid-title">
-                      <span class="grid-label">{{ grid.label }}</span>
-                      <span class="grid-value">{{ grid.displayValue || grid.value }}</span>
-                    </div>
-                    <div v-if="hasAlertmanagerMatchForGrid(grid)" class="grid-actions" @click.stop>
-                    <AlertmanagerSilenceDropdown
-                      :alerts="getGridAlerts(grid)"
-                      :labels="getMuteLabelsForGrid(grid, column)"
-                      :context-label="`${grid.label}: ${grid.displayValue || grid.value}`"
-                      :exclude-label-keys="getMuteExcludeLabelsForColumn(column)"
-                      :include-alertname-fallback="false"
-                      :confirm-before-create="true"
-                      size="small"
-                      @silenced="handleSilenceCreated"
-                    />
-                    </div>
-                  </div>
-
-                  <div class="grid-summary">
-                    <div class="grid-stat">
-                      <span class="stat-label">监控项:</span>
-                      <span class="stat-value">{{ getGridAlertCount(grid) }}</span>
-                    </div>
-                    <div class="grid-stat">
-                      <span class="stat-label">状态:</span>
-                      <div class="grid-status-group">
-                        <el-tag :type="getStateTagType(grid.state)" size="small">
-                          {{ getStateDisplayName(grid.state) }}
-                        </el-tag>
+                  <div class="grid-inner">
+                    <div class="grid-header">
+                      <div class="grid-title">
+                        <span v-if="shouldShowGridLabel(column)" class="grid-label">{{ grid.label }}</span>
+                        <span class="grid-value">{{ grid.displayValue || grid.value }}</span>
+                      </div>
+                      <div
+                        v-if="(isAllAlertsView && hasMissingTaskLabelForGrid(grid)) || hasAlertmanagerMatchForGrid(grid)"
+                        class="grid-actions"
+                        @click.stop
+                      >
                         <el-tag
-                          v-if="getGridSilenceLabel(grid)"
+                          v-if="isAllAlertsView && hasMissingTaskLabelForGrid(grid)"
                           type="warning"
                           size="small"
-                          class="grid-silence-tag"
                           effect="plain"
+                          class="missing-tasklabel-tag"
+                          :title="`存在告警缺少任务标签 ${taskLabel || ''}`"
                         >
-                          {{ getGridSilenceLabel(grid) }}
+                          无任务
                         </el-tag>
+
+                        <AlertmanagerSilenceDropdown
+                          v-if="hasAlertmanagerMatchForGrid(grid)"
+                          :alerts="getGridAlerts(grid)"
+                          :labels="getMuteLabelsForGrid(grid, column)"
+                          :context-label="`${grid.label}: ${grid.displayValue || grid.value}`"
+                          :exclude-label-keys="getMuteExcludeLabelsForColumn(column)"
+                          :include-alertname-fallback="false"
+                          :confirm-before-create="true"
+                          size="small"
+                          @silenced="handleSilenceCreated"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="grid-summary">
+                      <div class="grid-stat">
+                        <span class="stat-label">监控项:</span>
+                        <span class="stat-value">{{ getGridAlertCount(grid) }}</span>
+                      </div>
+                      <div class="grid-stat">
+                        <span class="stat-label">状态:</span>
+                        <div class="grid-status-group">
+                          <el-tag :type="getStateTagType(grid.state)" size="small">
+                            {{ getStateDisplayName(grid.state) }}
+                          </el-tag>
+                          <el-tag
+                            v-if="getGridSilenceLabel(grid)"
+                            type="warning"
+                            size="small"
+                            class="grid-silence-tag"
+                            effect="plain"
+                          >
+                            {{ getGridSilenceLabel(grid) }}
+                          </el-tag>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -238,6 +256,10 @@
                 v-for="([key, value], index) in dialogCommonLabels"
                 :key="index"
                 class="summary-common-chip"
+                :title="`点击复制 ${key}=${value}`"
+                role="button"
+                tabindex="0"
+                @click.stop="copyLabelText(key, value)"
               >
                 <span class="summary-common-key">{{ key }}</span>
                 <span class="summary-common-sep">:</span>
@@ -341,6 +363,10 @@
                     :key="index"
                     class="label-item"
                     :class="`label-${category}`"
+                    :title="`点击复制 ${key}=${value}`"
+                    role="button"
+                    tabindex="0"
+                    @click.stop="copyLabelText(key, value)"
                   >
                     <span class="label-key">{{ key }}:</span>
                     <span class="label-value">{{ value }}</span>
@@ -369,6 +395,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { Loading, Refresh } from '@element-plus/icons-vue'
 import { useVmalertStore } from '../../../stores/vmalertStore'
 import { getAlertStateDisplayName } from '../../../api/vmalert'
@@ -393,6 +420,49 @@ const route = useRoute()
 const prometheusStore = useVmalertStore()
 const linkify = new LinkifyIt()
 
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // Fallback for non-secure contexts or denied permissions
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.top = '-9999px'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      textarea.setSelectionRange(0, textarea.value.length)
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return ok
+    } catch {
+      return false
+    }
+  }
+}
+
+async function copyLabelText(key, value) {
+  const text = `${key}="${value}"`
+  const ok = await copyTextToClipboard(text)
+  if (ok) {
+    ElMessage.success({
+      message: '已复制到剪贴板',
+      duration: 2000,
+      showClose: false
+    })
+  } else {
+    ElMessage.error('复制失败')
+  }
+}
+
+function isSilencedFiringGrid(grid) {
+  return grid?.state === 'firing' && hasAlertmanagerSilenceForGrid(grid)
+}
+
 function hasAlertValue(alert) {
   return Boolean(alert && (alert.value !== undefined && alert.value !== null))
 }
@@ -407,6 +477,7 @@ function formatAlertValue(value) {
 }
 
 const currentTask = computed(() => route.params.taskName || null)
+const isAllAlertsView = computed(() => !currentTask.value)
 
 // Expanded alert index (for flat structure accordion-style expansion)
 const expandedAlertIndex = ref(null)
@@ -430,6 +501,15 @@ const fixedLabels = computed(() => getPrometheusFixedLabels() || {})
 
 // Get columns configuration
 const columnsConfig = computed(() => getPrometheusColumns())
+
+function shouldShowGridLabel(column) {
+  if (!column) return true
+  const columnConfig = columnsConfig.value.find(cfg => cfg.label === column.label) || null
+  const gridConfig = columnConfig?.grids || null
+  const displayNameAnnotation = gridConfig?.displayNameAnnotation
+  // If displayNameAnnotation is configured, the grid's label name is usually redundant.
+  return !(displayNameAnnotation && String(displayNameAnnotation).trim().length > 0)
+}
 
 // Highlight configuration for current dialog
 const dialogHighlightAnnotations = ref([])
@@ -614,6 +694,19 @@ function getGridAlerts(grid) {
     return grid.alerts
   }
   return []
+}
+
+function hasMissingTaskLabelForGrid(grid) {
+  const key = taskLabel.value
+  if (!key) return false
+  const alerts = getGridAlerts(grid)
+  if (!Array.isArray(alerts) || alerts.length === 0) return false
+
+  return alerts.some(alert => {
+    const raw = alert?.labels?.[key]
+    if (raw === undefined || raw === null) return true
+    return String(raw).trim().length === 0
+  })
 }
 
 function hasAlertmanagerMatchForGrid(grid) {
@@ -1060,17 +1153,51 @@ watch(
 
   --app-shadow-08: color-mix(in srgb, var(--el-text-color-primary) 8%, transparent);
 
+  --app-surface-bluegray: color-mix(in srgb, var(--el-color-info) 9%, var(--el-bg-color) 91%);
+  --app-surface-bluegray-2: color-mix(in srgb, var(--el-color-info) 13%, var(--el-bg-color) 87%);
+  --app-border-strong: color-mix(in srgb, var(--el-text-color-primary) 16%, var(--el-border-color) 84%);
+
+  /* Danger shimmer intensity: light mode one step deeper */
+  --app-am-danger-shimmer-base: var(--app-danger-14);
+  --app-am-danger-shimmer-peak: var(--app-danger-30);
+
+  /* Grid surfaces by state (light mode deeper) */
+  --app-grid-danger-surface: color-mix(in srgb, var(--el-color-danger) 10%, var(--app-surface-bluegray) 90%);
+  --app-grid-danger-surface-2: color-mix(in srgb, var(--el-color-danger) 14%, var(--app-surface-bluegray) 86%);
+
+  --app-grid-success-surface: color-mix(in srgb, var(--el-color-success) 8%, var(--app-surface-bluegray) 92%);
+  --app-grid-success-surface-2: color-mix(in srgb, var(--el-color-success) 12%, var(--app-surface-bluegray) 88%);
+
+  /* Alertmanager silenced: stronger green than normal inactive */
+  --app-grid-am-silenced-surface: color-mix(in srgb, var(--el-color-success) 22%, var(--app-surface-bluegray) 78%);
+  --app-grid-am-silenced-surface-2: color-mix(in srgb, var(--el-color-success) 32%, var(--app-surface-bluegray) 68%);
+
   display: flex;
   flex-direction: column;
   height: 100%;
   background: var(--el-bg-color);
 }
 
+:global(html.dark) .vmalert-monitor-container {
+  /* Dark mode one step lighter */
+  --app-am-danger-shimmer-base: var(--app-danger-10);
+  --app-am-danger-shimmer-peak: var(--app-danger-22);
+
+  --app-grid-danger-surface: color-mix(in srgb, var(--el-color-danger) 6%, var(--app-surface-bluegray) 94%);
+  --app-grid-danger-surface-2: color-mix(in srgb, var(--el-color-danger) 9%, var(--app-surface-bluegray) 91%);
+
+  --app-grid-success-surface: color-mix(in srgb, var(--el-color-success) 5%, var(--app-surface-bluegray) 95%);
+  --app-grid-success-surface-2: color-mix(in srgb, var(--el-color-success) 8%, var(--app-surface-bluegray) 92%);
+
+  --app-grid-am-silenced-surface: color-mix(in srgb, var(--el-color-success) 16%, var(--app-surface-bluegray) 84%);
+  --app-grid-am-silenced-surface-2: color-mix(in srgb, var(--el-color-success) 24%, var(--app-surface-bluegray) 76%);
+}
+
 .monitor-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 16.5px 24px;
   background: var(--el-bg-color);
   border-bottom: 1px solid var(--el-border-color-light);
 }
@@ -1182,14 +1309,14 @@ watch(
 }
 
 .alertmanager-tag {
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-8);
+  border-color: var(--el-color-primary-light-4);
   color: var(--el-color-primary);
 }
 
 .alertmanager-silenced-tag {
-  background: var(--el-color-warning-light-9);
-  border-color: var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-8);
+  border-color: var(--el-color-warning-light-4);
   color: var(--el-color-warning);
 }
 
@@ -1273,12 +1400,18 @@ watch(
   flex: 1 1 200px;
   min-width: 200px;
   max-width: 400px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
+  background: transparent;
+  border: 1px solid var(--app-border-strong);
   border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  overflow: visible;
+  box-shadow: 0 1px 3px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
   transition: all 0.2s ease;
+}
+
+.grid-inner {
+  background: var(--app-surface-bluegray);
+  border-radius: inherit;
+  overflow: hidden;
 }
 
 .grid-clickable {
@@ -1286,93 +1419,101 @@ watch(
 }
 
 .grid-clickable:hover {
-  box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.15), 0 3px 6px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 12px -2px var(--app-shadow-08), 0 3px 6px -3px var(--app-shadow-08);
   transform: translateY(-2px);
 }
 
 .grid-clickable:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
 }
 
 /* Grid state colors */
 .grid-firing {
-  border-color: var(--el-color-danger);
-  border-width: 2px;
-  box-shadow: 0 2px 8px 0 var(--app-danger-15), 0 1px 3px -1px var(--app-danger-10);
+  border-color: var(--app-border-strong);
+  border-width: 1px;
+  box-shadow: 0 1px 3px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
 }
 
 .grid-firing .grid-header {
-  background: linear-gradient(to bottom, var(--app-danger-08), var(--app-danger-12));
-  border-bottom: 1px solid var(--app-danger-20);
+  background: linear-gradient(to bottom, var(--app-grid-danger-surface-2), var(--app-grid-danger-surface));
+  border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .grid-pending {
-  border-color: var(--el-color-warning);
-  border-width: 2px;
-  box-shadow: 0 2px 8px 0 var(--app-warning-12), 0 1px 3px -1px var(--app-warning-08);
+  border-color: var(--app-border-strong);
+  border-width: 1px;
+  box-shadow: 0 1px 3px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
 }
 
 .grid-pending .grid-header {
-  background: linear-gradient(to bottom, var(--app-warning-08), var(--app-warning-12));
-  border-bottom: 1px solid var(--app-warning-20);
+  background: linear-gradient(to bottom, var(--app-grid-danger-surface-2), var(--app-grid-danger-surface));
+  border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .grid-inactive {
-  border-color: var(--el-color-success);
   border-width: 1px;
-  box-shadow: 0 1px 4px 0 var(--app-success-08), 0 1px 2px -1px var(--app-success-05);
+  border-color: var(--app-border-strong);
+  box-shadow: 0 1px 3px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
 }
 
 .grid-inactive .grid-header {
-  background: linear-gradient(to bottom, var(--app-success-05), var(--app-success-08));
-  border-bottom: 1px solid var(--app-success-15);
+  background: linear-gradient(to bottom, var(--app-grid-success-surface-2), var(--app-grid-success-surface));
+  border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .grid-alertmanager-match {
-  background: var(--el-color-danger-light-9);
-  border-color: var(--el-color-danger-light-3);
-  box-shadow: 0 8px 16px -8px var(--app-danger-45), 0 2px 6px -4px var(--app-danger-40);
+  border-color: var(--app-border-strong);
+  box-shadow: 0 1px 3px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
 }
 
 .grid-alertmanager-match .grid-header {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(to bottom, var(--app-surface-bluegray-2), var(--app-surface-bluegray));
+  border-bottom: 1px solid var(--el-border-color-light);
+  background-size: auto;
+  animation: none;
+}
+
+.grid-alertmanager-match .grid-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     110deg,
-    var(--app-danger-18) 0%,
-    var(--app-danger-32) 35%,
-    var(--app-bg-28) 50%,
-    var(--app-danger-32) 65%,
-    var(--app-danger-18) 100%
+    var(--app-am-danger-shimmer-base) 0%,
+    var(--app-am-danger-shimmer-base) 35%,
+    var(--app-am-danger-shimmer-peak) 50%,
+    var(--app-am-danger-shimmer-base) 65%,
+    var(--app-am-danger-shimmer-base) 100%
   );
-  border-bottom: 1px solid var(--app-danger-25);
   background-size: 300% 100%;
-  animation: gridHeaderShimmer 1.8s linear infinite, gridHeaderPulse 1.6s ease-in-out infinite;
+  animation: gridHeaderShimmer 2.2s linear infinite;
+  pointer-events: none;
+}
+
+.grid-alertmanager-match .grid-header > * {
+  position: relative;
+  z-index: 1;
 }
 
 .grid-alertmanager-silenced {
-  background: var(--el-color-warning-light-9);
-  border-color: var(--el-color-warning-light-3);
-  box-shadow: 0 8px 16px -8px var(--app-warning-45), 0 2px 6px -4px var(--app-warning-30);
+  border-color: var(--app-border-strong);
+  box-shadow: 0 1px 3px 0 var(--app-shadow-08), 0 1px 2px -1px var(--app-shadow-08);
 }
 
 .grid-alertmanager-silenced .grid-header {
-  background: linear-gradient(
-    110deg,
-    var(--app-warning-20) 0%,
-    var(--app-warning-38) 35%,
-    var(--app-bg-30) 50%,
-    var(--app-warning-38) 65%,
-    var(--app-warning-20) 100%
-  );
-  border-bottom: 1px solid var(--app-warning-30);
-  background-size: 320% 100%;
-  animation: gridHeaderSilenceShimmer 1.6s linear infinite, gridHeaderSilencePulse 1.4s ease-in-out infinite;
+  background: linear-gradient(to bottom, var(--app-grid-am-silenced-surface-2), var(--app-grid-am-silenced-surface));
+  border-bottom: 1px solid var(--el-border-color-light);
+  background-size: auto;
+  animation: none;
 }
 
 .grid-header {
   padding: 12px 16px;
-  background: linear-gradient(to bottom, var(--el-fill-color-lighter), var(--el-fill-color));
-  border-bottom: none;
+  background: linear-gradient(to bottom, var(--app-surface-bluegray-2), var(--app-surface-bluegray));
+  border-bottom: 1px solid var(--el-border-color-light);
   font-size: 12px;
   font-weight: 600;
   display: flex;
@@ -1393,16 +1534,24 @@ watch(
   display: flex;
   align-items: center;
   flex: 0 0 auto;
+  gap: 8px;
+}
+
+.missing-tasklabel-tag {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .grid-label {
-  color: var(--el-text-color-secondary);
+  color: var(--el-text-color-primary);
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 2px 8px;
-  background: var(--el-bg-color);
+  background: var(--el-fill-color-dark);
   border-radius: 4px;
 }
 
@@ -1422,10 +1571,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.grid-alert-item {
-  /* Container for each alert group */
 }
 
 .alert-detail-card {
@@ -1497,32 +1642,32 @@ watch(
 }
 
 .label-item.label-highlight-amber {
-  background: var(--el-color-warning-light-9);
-  border: 1px solid var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-8);
+  border: 1px solid var(--el-color-warning-light-4);
   box-shadow: 0 0 0 2px var(--app-warning-18);
 }
 
 .label-item.label-highlight-sky {
-  background: var(--el-color-info-light-9);
-  border: 1px solid var(--el-color-info-light-5);
+  background: var(--el-color-info-light-8);
+  border: 1px solid var(--el-color-info-light-4);
   box-shadow: 0 0 0 2px var(--app-info-18);
 }
 
 .label-item.label-highlight-emerald {
-  background: var(--el-color-success-light-9);
-  border: 1px solid var(--el-color-success-light-5);
+  background: var(--el-color-success-light-8);
+  border: 1px solid var(--el-color-success-light-4);
   box-shadow: 0 0 0 2px var(--app-success-18);
 }
 
 .label-item.label-highlight-rose {
-  background: var(--el-color-danger-light-9);
-  border: 1px solid var(--el-color-danger-light-5);
+  background: var(--el-color-danger-light-8);
+  border: 1px solid var(--el-color-danger-light-4);
   box-shadow: 0 0 0 2px var(--app-danger-18);
 }
 
 .label-item.label-highlight-violet {
-  background: var(--el-color-primary-light-9);
-  border: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-8);
+  border: 1px solid var(--el-color-primary-light-4);
   box-shadow: 0 0 0 2px var(--app-primary-18);
 }
 
@@ -1533,14 +1678,14 @@ watch(
 }
 
 .label-item.label-highlight-indigo {
-  background: var(--el-color-primary-light-9);
-  border: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-8);
+  border: 1px solid var(--el-color-primary-light-4);
   box-shadow: 0 0 0 2px var(--app-primary-12);
 }
 
 .label-item.label-highlight-teal {
-  background: var(--el-color-info-light-9);
-  border: 1px solid var(--el-color-info-light-5);
+  background: var(--el-color-info-light-8);
+  border: 1px solid var(--el-color-info-light-4);
   box-shadow: 0 0 0 2px var(--app-info-12);
 }
 
@@ -1550,32 +1695,32 @@ watch(
 }
 
 .label-item.label-diff-amber {
-  background: var(--el-color-warning-light-9);
-  border: 1px solid var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-8);
+  border: 1px solid var(--el-color-warning-light-4);
   box-shadow: 0 0 0 2px var(--app-warning-12);
 }
 
 .label-item.label-diff-sky {
-  background: var(--el-color-info-light-9);
-  border: 1px solid var(--el-color-info-light-5);
+  background: var(--el-color-info-light-8);
+  border: 1px solid var(--el-color-info-light-4);
   box-shadow: 0 0 0 2px var(--app-info-12);
 }
 
 .label-item.label-diff-emerald {
-  background: var(--el-color-success-light-9);
-  border: 1px solid var(--el-color-success-light-5);
+  background: var(--el-color-success-light-8);
+  border: 1px solid var(--el-color-success-light-4);
   box-shadow: 0 0 0 2px var(--app-success-12);
 }
 
 .label-item.label-diff-rose {
-  background: var(--el-color-danger-light-9);
-  border: 1px solid var(--el-color-danger-light-5);
+  background: var(--el-color-danger-light-8);
+  border: 1px solid var(--el-color-danger-light-4);
   box-shadow: 0 0 0 2px var(--app-danger-12);
 }
 
 .label-item.label-diff-violet {
-  background: var(--el-color-primary-light-9);
-  border: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-8);
+  border: 1px solid var(--el-color-primary-light-4);
   box-shadow: 0 0 0 2px var(--app-primary-12);
 }
 
@@ -1586,14 +1731,14 @@ watch(
 }
 
 .label-item.label-diff-indigo {
-  background: var(--el-color-primary-light-9);
-  border: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-8);
+  border: 1px solid var(--el-color-primary-light-4);
   box-shadow: 0 0 0 2px var(--app-primary-12);
 }
 
 .label-item.label-diff-teal {
-  background: var(--el-color-info-light-9);
-  border: 1px solid var(--el-color-info-light-5);
+  background: var(--el-color-info-light-8);
+  border: 1px solid var(--el-color-info-light-4);
   box-shadow: 0 0 0 2px var(--app-info-12);
 }
 
@@ -1604,8 +1749,8 @@ watch(
 
 /* Annotation categories - highlight important annotations */
 .annotation-item.annotation-highlight {
-  background: var(--el-color-warning-light-9);
-  border: 1px solid var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-8);
+  border: 1px solid var(--el-color-warning-light-4);
   box-shadow: 0 0 0 2px var(--app-warning-18);
   font-weight: 600;
 }
@@ -1696,8 +1841,8 @@ watch(
 }
 
 .grid-silence-tag {
-  background: var(--el-color-warning-light-9);
-  border-color: var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-8);
+  border-color: var(--el-color-warning-light-4);
   color: var(--el-color-warning);
 }
 
@@ -1765,6 +1910,14 @@ watch(
   font-size: 12px;
   color: var(--el-text-color-regular);
   max-width: 220px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.summary-common-chip:hover {
+  background: var(--el-fill-color-lighter);
+  border-color: var(--el-border-color-light);
 }
 
 .summary-common-key {
@@ -1820,17 +1973,17 @@ watch(
 
 .dialog-alert-item.alert-firing {
   border-left: 4px solid var(--el-color-danger);
-  background: linear-gradient(to right, var(--app-danger-02), transparent);
+  background: linear-gradient(to right, var(--app-danger-06), transparent);
 }
 
 .dialog-alert-item.alert-pending {
   border-left: 4px solid var(--el-color-warning);
-  background: linear-gradient(to right, var(--app-warning-02), transparent);
+  background: linear-gradient(to right, var(--app-warning-06), transparent);
 }
 
 .dialog-alert-item.alert-inactive {
   border-left: 4px solid var(--el-color-success);
-  background: linear-gradient(to right, var(--app-success-02), transparent);
+  background: linear-gradient(to right, var(--app-success-05), transparent);
 }
 
 .dialog-alert-item.alertmanager-match {

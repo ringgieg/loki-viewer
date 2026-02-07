@@ -103,7 +103,7 @@ describe('vmalertStore', () => {
     expect(taskNames).toEqual(['task-a', 'task-b'])
 
     const taskA = store.tasks.find(t => t.name === 'task-a')
-    expect(taskA.watched).toBe(false)
+    expect(taskA.watched).toBe(true)
     expect(taskA.existsInVmalert).toBe(true)
 
     expect(store.alertCounts.total).toBe(3)
@@ -129,6 +129,6 @@ describe('vmalertStore', () => {
     expect(JSON.parse(localStorage.getItem(key))).toEqual(['task-a'])
 
     const taskA = store.tasks.find(t => t.name === 'task-a')
-    expect(taskA.watched).toBe(true)
+    expect(taskA.watched).toBe(false)
   })
 })

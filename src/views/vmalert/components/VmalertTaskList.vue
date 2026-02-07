@@ -294,11 +294,35 @@ onUnmounted(() => {
 
 <style scoped>
 .task-list-container {
+  /* Light mode: keep tasklist on normal background (no gray/blue tint) */
+  --app-surface-bluegray: var(--el-bg-color);
+  --app-surface-bluegray-2: var(--el-fill-color-light);
+  --app-border-strong: var(--el-border-color-light);
+
+  /* Danger emphasis: light mode slightly deeper */
+  --app-task-danger-bg: color-mix(in srgb, var(--el-color-danger) 8%, var(--app-surface-bluegray) 92%);
+  --app-task-danger-bg-selected: color-mix(in srgb, var(--el-color-danger) 12%, var(--app-surface-bluegray) 88%);
+
+  --app-task-header-bg: var(--el-bg-color);
+
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--el-bg-color);
-  border-right: 1px solid var(--el-border-color-light);
+  background: var(--app-surface-bluegray);
+  border-right: 1px solid var(--app-border-strong);
+}
+
+:global(html.dark) .task-list-container {
+  /* Dark mode: keep blue-gray surface */
+  --app-surface-bluegray: color-mix(in srgb, var(--el-color-info) 9%, var(--el-bg-color) 91%);
+  --app-surface-bluegray-2: color-mix(in srgb, var(--el-color-info) 13%, var(--el-bg-color) 87%);
+  --app-border-strong: color-mix(in srgb, var(--el-text-color-primary) 16%, var(--el-border-color) 84%);
+
+  /* Danger emphasis: dark mode one step lighter */
+  --app-task-danger-bg: color-mix(in srgb, var(--el-color-danger) 4%, var(--app-surface-bluegray) 96%);
+  --app-task-danger-bg-selected: color-mix(in srgb, var(--el-color-danger) 8%, var(--app-surface-bluegray) 92%);
+
+  --app-task-header-bg: linear-gradient(to bottom, var(--app-surface-bluegray-2), var(--app-surface-bluegray));
 }
 
 .task-list-header {
@@ -306,8 +330,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 16px;
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--app-task-header-bg);
+  border-bottom: 1px solid var(--app-border-strong);
 }
 
 .search-input {
@@ -330,18 +354,18 @@ onUnmounted(() => {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: var(--el-bg-color);
+  background: var(--app-surface-bluegray);
   border: 1px solid transparent;
 }
 
 .task-item:hover {
-  background: var(--el-fill-color-light);
-  border-color: var(--el-border-color);
+  background: var(--app-surface-bluegray-2);
+  border-color: transparent;
 }
 
 .task-item.is-selected {
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface-bluegray) 88%);
+  border-color: transparent;
 }
 
 .task-item.has-alertmanager-match {
@@ -352,19 +376,19 @@ onUnmounted(() => {
   --app-am-danger-35: color-mix(in srgb, var(--el-color-danger) 35%, transparent);
   --app-am-bg-22: color-mix(in srgb, var(--el-bg-color) 22%, transparent);
   position: relative;
-  background: var(--el-color-danger-light-9);
-  border-color: var(--el-color-danger-light-5);
-  box-shadow: 0 0 0 2px var(--app-am-danger-18);
-  overflow: hidden;
+  background: var(--app-task-danger-bg);
+  border-color: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .task-item.has-alertmanager-match.is-selected {
-  background: var(--el-color-danger-light-8);
-  border-color: var(--el-color-danger-light-3);
+  background: var(--app-task-danger-bg-selected);
+  border-color: transparent;
 }
 
 .task-item.has-alertmanager-match::before {
-  content: '';
+  content: none;
   position: absolute;
   inset: 0;
   background: linear-gradient(
@@ -381,7 +405,7 @@ onUnmounted(() => {
 }
 
 .task-item.has-alertmanager-match::after {
-  content: '';
+  content: none;
   position: absolute;
   inset: 0;
   box-shadow: inset 0 0 0 1px var(--app-am-danger-25), 0 0 0 0 var(--app-am-danger-35);

@@ -33,7 +33,11 @@
           <el-icon v-else><ArrowRight /></el-icon>
         </span>
       </div>
-      <div class="log-content" v-html="escapeHtml(getTruncatedContent(item.log))"></div>
+      <div
+        class="log-content"
+        v-html="linkifyText(getTruncatedContent(item.log))"
+        @click="handleLogContentClick"
+      ></div>
       <div v-if="shouldShowTruncateHint(item.log)" class="truncate-hint">
         ...（点击展开查看完整日志）
       </div>
@@ -93,6 +97,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, DocumentCopy, Loading } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import LinkifyIt from 'linkify-it'
 import { getConfig } from '../../../utils/config'
 
 const props = defineProps({
@@ -110,6 +115,8 @@ const itemHeights = ref({})
 const scrollTop = ref(0)
 const containerHeight = ref(0)
 const expandedLogs = ref(new Set())
+
+const linkify = new LinkifyIt()
 
 const BUFFER = props.bufferSize
 
@@ -199,6 +206,51 @@ function escapeHtml(text) {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+function escapeHtmlAttr(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function linkifyText(text) {
+  if (!text) return ''
+  const matches = linkify.match(text)
+  if (!matches || matches.length === 0) {
+    return escapeHtml(text)
+  }
+
+  let result = ''
+  let lastIndex = 0
+  for (const match of matches) {
+    const start = match.index
+    const end = match.lastIndex
+    if (start > lastIndex) {
+      result += escapeHtml(text.slice(lastIndex, start))
+    }
+
+    const href = escapeHtmlAttr(match.url)
+    const label = escapeHtml(text.slice(start, end))
+    result += `<a class="log-link" target="_blank" rel="noopener noreferrer" href="${href}">${label}</a>`
+    lastIndex = end
+  }
+
+  if (lastIndex < text.length) {
+    result += escapeHtml(text.slice(lastIndex))
+  }
+
+  return result
+}
+
+function handleLogContentClick(event) {
+  const target = event.target
+  if (target && target.closest && target.closest('a')) {
+    event.stopPropagation()
+  }
 }
 
 function getTruncatedContent(log) {
@@ -341,12 +393,12 @@ onUnmounted(() => {
 
 .log-entry.level-error {
   border-left-color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
+  background: var(--el-color-danger-light-8);
 }
 
 .log-entry.level-warn {
   border-left-color: var(--el-color-warning);
-  background: var(--el-color-warning-light-9);
+  background: var(--el-color-warning-light-8);
 }
 
 .log-entry.level-debug {
@@ -374,7 +426,7 @@ onUnmounted(() => {
 
 .log-entry:hover .expand-icon {
   color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  background: var(--el-color-primary-light-8);
 }
 
 .log-time {
@@ -396,12 +448,12 @@ onUnmounted(() => {
 }
 
 .log-level.level-error {
-  background: var(--el-color-danger-light-9);
+  background: var(--el-color-danger-light-8);
   color: var(--el-color-danger-dark-2);
 }
 
 .log-level.level-warn {
-  background: var(--el-color-warning-light-9);
+  background: var(--el-color-warning-light-8);
   color: var(--el-color-warning-dark-2);
 }
 
@@ -427,9 +479,20 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
   white-space: pre-wrap;
   word-break: break-word;
-  user-select: text;
-  cursor: text;
+  user-select: none;
+  cursor: default;
   padding-left: 4px;
+}
+
+.log-content :deep(a.log-link) {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  user-select: none;
+}
+
+.log-content :deep(a.log-link:hover) {
+  color: var(--el-color-primary-dark-2);
 }
 
 .truncate-hint {

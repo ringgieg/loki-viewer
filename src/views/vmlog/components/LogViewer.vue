@@ -234,7 +234,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 15px 24px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color);
 }
@@ -263,12 +263,12 @@ onUnmounted(() => {
 
 .connection-status.connected {
   color: var(--el-color-success);
-  background: var(--el-color-success-light-9);
+  background: var(--el-color-success-light-8);
 }
 
 .connection-status.disconnected {
   color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
+  background: var(--el-color-danger-light-8);
 }
 
 .header-filters {

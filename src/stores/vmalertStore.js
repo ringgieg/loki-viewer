@@ -33,7 +33,8 @@ export const useVmalertStore = defineStore('vmalert', () => {
   const alertmanagerReceiverAlerts = ref([])
   const alertmanagerSilences = ref([])
   const tasks = ref([])
-  const watchedTasks = ref(new Set())
+  // We store *unwatched* tasks so the default behavior is "watched".
+  const unwatchedTasks = ref(new Set())
   const selectedTask = ref(null)
   const loading = ref(false)
   const polling = ref(false)
@@ -63,9 +64,9 @@ export const useVmalertStore = defineStore('vmalert', () => {
     try {
       const saved = localStorage.getItem(getStorageKey())
       if (saved) {
-        watchedTasks.value = new Set(JSON.parse(saved))
+        unwatchedTasks.value = new Set(JSON.parse(saved))
       } else {
-        watchedTasks.value = new Set()
+        unwatchedTasks.value = new Set()
       }
     } catch (e) {
       console.error('[PrometheusStore] Error loading watched tasks:', e)
@@ -75,10 +76,14 @@ export const useVmalertStore = defineStore('vmalert', () => {
   // Save watched tasks to localStorage
   function saveWatchedTasks() {
     try {
-      localStorage.setItem(getStorageKey(), JSON.stringify([...watchedTasks.value]))
+      localStorage.setItem(getStorageKey(), JSON.stringify([...unwatchedTasks.value]))
     } catch (e) {
       console.error('[PrometheusStore] Error saving watched tasks:', e)
     }
+  }
+
+  function isTaskWatched(taskName) {
+    return !unwatchedTasks.value.has(taskName)
   }
 
   // Computed: Filtered tasks (watched tasks first, then others)
@@ -146,11 +151,11 @@ export const useVmalertStore = defineStore('vmalert', () => {
       })
 
       // Merge with watched tasks
-      const allTaskNames = new Set([...taskNamesFromAlerts, ...watchedTasks.value])
+      const allTaskNames = new Set([...taskNamesFromAlerts, ...unwatchedTasks.value])
 
       tasks.value = Array.from(allTaskNames).map(name => ({
         name,
-        watched: watchedTasks.value.has(name),
+        watched: isTaskWatched(name),
         existsInVmalert: taskNamesFromAlerts.has(name)
       }))
 
@@ -464,16 +469,17 @@ export const useVmalertStore = defineStore('vmalert', () => {
 
   // Toggle task watch status
   function toggleTaskWatch(taskName) {
-    if (watchedTasks.value.has(taskName)) {
-      watchedTasks.value.delete(taskName)
+    // Default is watched; toggling means add/remove from the *unwatched* set.
+    if (unwatchedTasks.value.has(taskName)) {
+      unwatchedTasks.value.delete(taskName)
     } else {
-      watchedTasks.value.add(taskName)
+      unwatchedTasks.value.add(taskName)
     }
 
     // Update tasks array
     const task = tasks.value.find(t => t.name === taskName)
     if (task) {
-      task.watched = watchedTasks.value.has(taskName)
+      task.watched = isTaskWatched(taskName)
     }
 
     saveWatchedTasks()
@@ -673,7 +679,8 @@ export const useVmalertStore = defineStore('vmalert', () => {
     alertmanagerReceiverAlerts,
     alertmanagerSilences,
     tasks,
-    watchedTasks,
+    // Expose as "watchedTasks" for backwards compatibility (Set of *unwatched* task names).
+    watchedTasks: unwatchedTasks,
     selectedTask,
     loading,
     polling,

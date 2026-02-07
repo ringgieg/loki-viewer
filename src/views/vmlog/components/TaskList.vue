@@ -283,7 +283,7 @@ onUnmounted(() => {
 }
 
 .task-item.is-selected {
-  background: var(--el-color-primary-light-9);
+  background: var(--el-color-primary-light-8);
   border-left: 3px solid var(--el-color-primary);
   padding-left: 13px;
 }
