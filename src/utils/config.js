@@ -7,11 +7,16 @@ const defaultConfig = {
   pageTitle: '',
   appTitle: '',
   activeService: 'batch-sync',
-  themeSchedule: {
+  // Schedule configuration (theme switching + optional maintenance refresh)
+  // Backward-compatible with legacy key: themeSchedule
+  schedule: {
     mode: 'auto',
     timeZone: 'Asia/Shanghai',
     dayStart: '08:25',
-    nightStart: '16:25'
+    nightStart: '16:25',
+    // Optional: page auto-refresh time points (HH:MM) to mitigate long-running memory issues
+    // Only triggers when there is no global alert overlay.
+    autoRefresh: []
   },
   // Global VMLog defaults (can be overridden per-service)
   vmlog: {

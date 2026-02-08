@@ -224,9 +224,11 @@ export const useAlertStore = defineStore('alert', () => {
    */
   function setMute(minutes) {
     if (minutes === 0) {
+      const wasPermanentMuted = muteUntil.value === -1
       // Unmute
       muteUntil.value = 0
       stopMuteCheckTimer()
+      justUnmutedFromPermanent.value = wasPermanentMuted
       console.log('Alert unmuted')
     } else if (minutes === -1) {
       // Permanent mute
@@ -276,6 +278,14 @@ export const useAlertStore = defineStore('alert', () => {
     }
   }
 
+  /**
+   * Cleanup - stop timers to prevent memory leaks
+   */
+  function cleanup() {
+    stopMuteCheckTimer()
+    console.log('[AlertStore] Cleaned up')
+  }
+
   return {
     // State
     hasAlert,
@@ -286,6 +296,7 @@ export const useAlertStore = defineStore('alert', () => {
 
     // Actions
     initialize,
+    cleanup,
     triggerAlert,
     dismissAlert,
     removeAlertReason,

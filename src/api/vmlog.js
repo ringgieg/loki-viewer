@@ -76,49 +76,45 @@ export async function queryLogsWithCursor(query, options = {}) {
   // Create unique key for this query to support concurrent requests
   const requestKey = `${query}-${safeOffset}-${limit}`
 
-  // Wait for any pending request with the same key to complete
+  // True de-duplication: if the same request is already in-flight,
+  // return the same Promise instead of waiting and issuing a new request.
   if (pendingRequests.has(requestKey)) {
-    try {
-      await pendingRequests.get(requestKey)
-    } catch (e) {
-      // Ignore errors from previous request
+    return pendingRequests.get(requestKey)
+  }
+
+  const currentRequest = (async () => {
+    const requestFn = async () => {
+      const body = new URLSearchParams({
+        query,
+        limit: String(limit),
+        offset: String(safeOffset),
+        start: `${timeRangeDays}d`,
+        end: 'now'
+      })
+
+      return axios.post(buildLogSqlUrl('query'), body, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        responseType: 'text'
+      })
     }
-  }
 
-  const requestFn = async () => {
-    const body = new URLSearchParams({
-      query,
-      limit: String(limit),
-      offset: String(safeOffset),
-      start: `${timeRangeDays}d`,
-      end: 'now'
-    })
+    try {
+      const response = await retryWithBackoff(requestFn)
+      const logs = parseLogSqlResponse(response.data)
+      const hasMore = logs.length >= limit
+      const nextCursor = hasMore ? String(safeOffset + logs.length) : null
+      return { logs, nextCursor, hasMore }
+    } catch (error) {
+      console.error('Error querying logs with cursor:', error)
+      throw error
+    } finally {
+      // Always clean up pending request to prevent memory leak
+      pendingRequests.delete(requestKey)
+    }
+  })()
 
-    const response = await axios.post(buildLogSqlUrl('query'), body, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      responseType: 'text'
-    })
-
-    return response
-  }
-
-  try {
-    const currentRequest = retryWithBackoff(requestFn)
-    pendingRequests.set(requestKey, currentRequest)
-    const response = await currentRequest
-
-    const logs = parseLogSqlResponse(response.data)
-    const hasMore = logs.length >= limit
-    const nextCursor = hasMore ? String(safeOffset + logs.length) : null
-
-    return { logs, nextCursor, hasMore }
-  } catch (error) {
-    console.error('Error querying logs with cursor:', error)
-    throw error
-  } finally {
-    // Always clean up pending request to prevent memory leak
-    pendingRequests.delete(requestKey)
-  }
+  pendingRequests.set(requestKey, currentRequest)
+  return currentRequest
 }
 
 /**
@@ -162,14 +158,6 @@ export function tailLogs(query, callbacks = {}) {
       isConnecting = true
       abortController = new AbortController()
 
-      // Optimistically report open once a request is initiated.
-      // Some proxies may not deliver headers until the first log line.
-      // If the request fails, onClose/onError will flip the state back.
-      if (!isConnected) {
-        isConnected = true
-        if (onOpen) onOpen()
-      }
-
       const body = new URLSearchParams({
         query,
         // deliver logs with a small delay; VictoriaLogs expects duration string
@@ -195,10 +183,12 @@ export function tailLogs(query, callbacks = {}) {
           throw new Error('Tail response has no body stream')
         }
 
-        isConnected = true
+        if (!isConnected) {
+          isConnected = true
+          if (onOpen) onOpen()
+        }
         isConnecting = false
         reconnectAttempts = 0
-        // onOpen may have already fired optimistically above.
 
         const reader = response.body.getReader()
         const decoder = new TextDecoder('utf-8')
@@ -230,7 +220,7 @@ export function tailLogs(query, callbacks = {}) {
         isConnected = false
         if (onError) onError(error)
       }).finally(() => {
-        const event = { type: 'close' }
+        const event = { type: 'close', manual: isManualClose }
         isConnecting = false
         isConnected = false
         if (onClose) onClose(event)

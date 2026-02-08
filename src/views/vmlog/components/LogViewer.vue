@@ -82,7 +82,14 @@ const logsPerPage = getCurrentServiceConfig('logsPerPage', 500)
 const newLogHighlightDuration = getCurrentServiceConfig('alert.newLogHighlightDuration', 3000)
 
 let unsubscribe = null
-let highlightTimer = null
+const highlightTimeouts = new Map()
+
+function clearHighlightTimeouts() {
+  for (const timeoutId of highlightTimeouts.values()) {
+    clearTimeout(timeoutId)
+  }
+  highlightTimeouts.clear()
+}
 
 const connectionStatus = computed(() => {
   if (wsStore.isConnected) return 'connected'
@@ -183,23 +190,29 @@ function startStreaming() {
     if (filteredLogs.length === 0) return
 
     const markedLogs = filteredLogs.map(log => ({ ...log, isNew: true }))
-    logs.value = [...markedLogs, ...logs.value]
+    // Insert in-place to avoid allocating a new array on every update
+    // (helps performance when logs stream frequently)
+    logs.value.unshift(...markedLogs)
 
-    // Clear previous timer to avoid memory leak
-    if (highlightTimer) {
-      clearTimeout(highlightTimer)
-    }
+    for (const newLog of markedLogs) {
+      const logId = newLog.id
+      if (!logId) continue
 
-    // Set new timer to remove highlight
-    highlightTimer = setTimeout(() => {
-      logs.value = logs.value.map(log => {
-        if (markedLogs.find(nl => nl.id === log.id)) {
-          return { ...log, isNew: false }
+      const existingTimeout = highlightTimeouts.get(logId)
+      if (existingTimeout) {
+        clearTimeout(existingTimeout)
+      }
+
+      const timeoutId = setTimeout(() => {
+        const idx = logs.value.findIndex(l => l.id === logId)
+        if (idx !== -1 && logs.value[idx]?.isNew) {
+          logs.value[idx] = { ...logs.value[idx], isNew: false }
         }
-        return log
-      })
-      highlightTimer = null
-    }, newLogHighlightDuration)
+        highlightTimeouts.delete(logId)
+      }, newLogHighlightDuration)
+
+      highlightTimeouts.set(logId, timeoutId)
+    }
   })
 }
 
@@ -208,17 +221,14 @@ function stopStreaming() {
     unsubscribe()
     unsubscribe = null
   }
+
+  clearHighlightTimeouts()
 }
 
 onUnmounted(() => {
   stopStreaming()
   // Clear currently viewing task
   wsStore.setCurrentViewingTask(null)
-  // Clean up highlight timer to prevent memory leak
-  if (highlightTimer) {
-    clearTimeout(highlightTimer)
-    highlightTimer = null
-  }
 })
 </script>
 

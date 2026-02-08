@@ -140,6 +140,31 @@ describe('vmlog.js', () => {
 
       expect(axios.post).toHaveBeenCalledTimes(3) // max retries = 3
     })
+
+    it('should dedupe concurrent identical requests', async () => {
+      const mockResponse = {
+        data: JSON.stringify({ _time: '2026-02-06T00:00:00Z', _msg: 'Same', service: 'batch-sync', task_name: 't', level: 'INFO' }) + '\n'
+      }
+
+      let resolvePost
+      const postPromise = new Promise((resolve) => {
+        resolvePost = resolve
+      })
+
+      axios.post.mockReturnValue(postPromise)
+
+      const p1 = queryLogsWithCursor('{service="batch-sync"}', { limit: 10 })
+      const p2 = queryLogsWithCursor('{service="batch-sync"}', { limit: 10 })
+
+      expect(axios.post).toHaveBeenCalledTimes(1)
+
+      resolvePost(mockResponse)
+
+      const [r1, r2] = await Promise.all([p1, p2])
+      expect(r1).toEqual(r2)
+      expect(r1.logs).toHaveLength(1)
+      expect(r1.logs[0].line).toBe('Same')
+    })
   })
 
   describe('getLabelValues()', () => {

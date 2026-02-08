@@ -15,15 +15,18 @@ window.APP_CONFIG = {
   // 活动服务 ID（启动时监控哪个服务，可选，默认：第一个服务的 ID）
   activeService: 'vmalert-dashboard',
 
-  // 主题切换（可选）
+  // 调度配置（可选）：主题切换 + 定时自动刷新
   // 按北京时间自动切换：08:25 -> 白天模式，16:25 -> 黑夜模式
-  themeSchedule: {
+  // autoRefresh：到点自动刷新页面（仅当没有全局告警遮罩时才刷新），用于缓解长时间运行的内存累积
+  schedule: {
     // 可选：'auto'（自动切换）/ 'dark'（始终暗色）/ 'light'（始终亮色）
     mode: 'light', 
     // mode: 'dark', 
     timeZone: 'Asia/Shanghai',
     dayStart: '08:25',
-    nightStart: '16:25'
+    nightStart: '16:25',
+    autoRefresh: []
+    // autoRefresh: ['04:00', '16:30']
   },
 
   // 服务配置（必需，至少配置一个服务）

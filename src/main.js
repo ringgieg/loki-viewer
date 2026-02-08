@@ -11,8 +11,10 @@ import router from './router'
 import './styles/main.css'
 
 import { startThemeScheduler } from './utils/theme'
+import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 
-startThemeScheduler()
+const pinia = createPinia()
+const queryClient = new QueryClient()
 
 const app = createApp(App)
 
@@ -21,7 +23,11 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
+app.use(VueQueryPlugin, { queryClient })
+
+// Start scheduler after Pinia is installed (auto-refresh needs access to stores).
+startThemeScheduler()
 app.mount('#app')

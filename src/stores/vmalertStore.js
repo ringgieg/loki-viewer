@@ -41,9 +41,9 @@ export const useVmalertStore = defineStore('vmalert', () => {
   const pollingCountdown = ref(0)
   const deadManSwitchOk = ref(true) // DeadManSwitch status
 
-  // Polling timer
-  let pollingTimer = null
+  // Countdown timer (UI only; actual polling is driven by vue-query)
   let countdownTimer = null
+  const lastPolledAt = ref(0)
 
   // Get storage key for current service
   function getStorageKey() {
@@ -413,24 +413,18 @@ export const useVmalertStore = defineStore('vmalert', () => {
 
     console.log(`[PrometheusStore] Starting polling (interval: ${interval}ms)`)
 
-    // Reset countdown
+    // Mark as just-polled so countdown starts immediately.
+    lastPolledAt.value = Date.now()
+
+    // Start countdown timer (UI only). The actual refetch happens in vue-query.
     pollingCountdown.value = Math.floor(interval / 1000)
-
-    // Start countdown timer
     countdownTimer = setInterval(() => {
-      if (pollingCountdown.value > 0) {
-        pollingCountdown.value--
-      }
+      if (!polling.value) return
+
+      const elapsed = Date.now() - (lastPolledAt.value || Date.now())
+      const remainingMs = Math.max(0, interval - elapsed)
+      pollingCountdown.value = Math.floor(remainingMs / 1000)
     }, 1000)
-
-    // Poll immediately
-    pollOnce()
-
-    // Start polling timer
-    pollingTimer = setInterval(async () => {
-      await pollOnce()
-      pollingCountdown.value = Math.floor(interval / 1000)
-    }, interval)
   }
 
   // Stop polling
@@ -438,11 +432,6 @@ export const useVmalertStore = defineStore('vmalert', () => {
     if (!polling.value) return
 
     polling.value = false
-
-    if (pollingTimer) {
-      clearInterval(pollingTimer)
-      pollingTimer = null
-    }
 
     if (countdownTimer) {
       clearInterval(countdownTimer)
@@ -453,18 +442,17 @@ export const useVmalertStore = defineStore('vmalert', () => {
     console.log('[PrometheusStore] Polling stopped')
   }
 
-  // Poll once
-  async function pollOnce() {
-    try {
-      await fetchAlerts()
-    } catch (e) {
-      console.error('[PrometheusStore] Error during poll:', e)
-    }
+  // Mark that a poll has completed (called by vue-query polling driver)
+  function markPolled(at = Date.now()) {
+    lastPolledAt.value = at
+    const interval = getPrometheusPollingInterval()
+    pollingCountdown.value = Math.floor(interval / 1000)
   }
 
   // Refresh (fetch alerts which will also update tasks)
   async function refresh() {
     await fetchAlerts({ showLoading: true })
+    markPolled()
   }
 
   // Toggle task watch status
@@ -694,16 +682,16 @@ export const useVmalertStore = defineStore('vmalert', () => {
 
     // Actions
     initialize,
+    cleanup,
     fetchAlerts,
     refresh,
+    markPolled,
     refreshAlertmanagerSilences,
     startPolling,
     stopPolling,
-    pollOnce,
     toggleTaskWatch,
     selectTask,
     clearTasks,
-    buildAlertHierarchy,
-    cleanup
+    buildAlertHierarchy
   }
 })

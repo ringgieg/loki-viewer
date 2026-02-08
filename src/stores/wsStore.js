@@ -110,8 +110,12 @@ export const useWsStore = defineStore('ws', () => {
           console.log('Initialization complete, now monitoring for new errors')
         }, delay)
       },
-      onClose: () => {
+      onClose: (event) => {
         isConnected.value = false
+        if (event && event.manual) {
+          console.log('WebSocket disconnected manually; skipping disconnect alert')
+          return
+        }
         const serviceName = getCurrentServiceConfig('vmlog.fixedLabels.service', 'service')
         console.log(`WebSocket disconnected from service: ${serviceName}, hadConnection:`, hadConnection)
         // Trigger disconnect alert only if we had a connection before

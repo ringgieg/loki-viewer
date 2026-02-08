@@ -13,13 +13,14 @@
 </template>
 
 <script setup>
-import { onMounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useServiceStore } from './stores/serviceStore'
 import { useAlertStore } from './stores/alertStore'
 import NavBar from './components/NavBar.vue'
 import AlertOverlay from './components/AlertOverlay.vue'
 import MuteButton from './components/MuteButton.vue'
+import { stopThemeScheduler } from './utils/theme'
 
 const route = useRoute()
 const serviceStore = useServiceStore()
@@ -44,6 +45,18 @@ onMounted(async () => {
   alertStore.initialize()
 
   console.log('[App] Initialized (mode-specific initialization handled by route components)')
+})
+
+onUnmounted(() => {
+  console.log('[App] Cleaning up...')
+  
+  // Stop theme scheduler to prevent timer leaks
+  stopThemeScheduler()
+  
+  // Cleanup alert store timers
+  alertStore.cleanup()
+  
+  console.log('[App] Cleaned up')
 })
 </script>
 

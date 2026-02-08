@@ -219,6 +219,30 @@ window.APP_CONFIG = {
   }
   ```
 
+### 调度配置
+
+#### `schedule` (可选)
+- **类型**: `object`
+- **说明**: 主题切换 + 定时自动刷新（用于缓解长时间运行的内存累积）
+- **兼容性**: 旧配置 `themeSchedule` 仍可用，但建议迁移到 `schedule`
+- **字段**:
+  - `mode`: `'auto' | 'dark' | 'light'`
+  - `timeZone`: 时区（默认：`'Asia/Shanghai'`）
+  - `dayStart`: 白天开始时间（`HH:MM`）
+  - `nightStart`: 夜间开始时间（`HH:MM`）
+  - `autoRefresh`: `Array<string>`，到点自动刷新时间点列表（`HH:MM`）
+    - **规则**: 仅当没有全局告警遮罩（`hasAlert === false`）时才会刷新
+- **示例**:
+  ```javascript
+  schedule: {
+    mode: 'auto',
+    timeZone: 'Asia/Shanghai',
+    dayStart: '08:25',
+    nightStart: '16:25',
+    autoRefresh: ['04:00', '16:30']
+  }
+  ```
+
 ### 服务配置
 
 #### `activeService` (必填)

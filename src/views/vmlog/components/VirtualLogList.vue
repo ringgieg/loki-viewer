@@ -11,7 +11,7 @@
     <div
       v-for="item in visibleItems"
       :key="item.log.id"
-      :ref="el => setItemRef(el, item.index)"
+      :ref="el => setItemRef(el, item.log.id)"
       class="log-entry"
       :class="[
         'level-' + (item.log.level || 'info').toLowerCase(),
@@ -125,12 +125,17 @@ const visibleRange = computed(() => {
     return { start: 0, end: 0 }
   }
 
+  const getHeightAt = (i) => {
+    const id = props.logs[i]?.id
+    return (id && itemHeights.value[id]) || props.estimatedItemHeight
+  }
+
   let accumulatedHeight = 0
   let startIndex = 0
   let endIndex = props.logs.length
 
   for (let i = 0; i < props.logs.length; i++) {
-    const itemHeight = itemHeights.value[i] || props.estimatedItemHeight
+    const itemHeight = getHeightAt(i)
     if (accumulatedHeight + itemHeight >= scrollTop.value) {
       startIndex = Math.max(0, i - BUFFER)
       break
@@ -140,7 +145,7 @@ const visibleRange = computed(() => {
 
   accumulatedHeight = 0
   for (let i = 0; i < props.logs.length; i++) {
-    accumulatedHeight += itemHeights.value[i] || props.estimatedItemHeight
+    accumulatedHeight += getHeightAt(i)
     if (accumulatedHeight > scrollTop.value + containerHeight.value) {
       endIndex = Math.min(props.logs.length, i + BUFFER)
       break
@@ -160,25 +165,33 @@ const visibleItems = computed(() => {
 
 const topSpacerHeight = computed(() => {
   let height = 0
+  const getHeightAt = (i) => {
+    const id = props.logs[i]?.id
+    return (id && itemHeights.value[id]) || props.estimatedItemHeight
+  }
   for (let i = 0; i < visibleRange.value.start; i++) {
-    height += itemHeights.value[i] || props.estimatedItemHeight
+    height += getHeightAt(i)
   }
   return height
 })
 
 const bottomSpacerHeight = computed(() => {
   let height = 0
+  const getHeightAt = (i) => {
+    const id = props.logs[i]?.id
+    return (id && itemHeights.value[id]) || props.estimatedItemHeight
+  }
   for (let i = visibleRange.value.end; i < props.logs.length; i++) {
-    height += itemHeights.value[i] || props.estimatedItemHeight
+    height += getHeightAt(i)
   }
   return height
 })
 
-function setItemRef(el, index) {
+function setItemRef(el, id) {
   if (el) {
     nextTick(() => {
       if (el && el.offsetHeight) {
-        itemHeights.value[index] = el.offsetHeight
+        if (id) itemHeights.value[id] = el.offsetHeight
       }
     })
   }

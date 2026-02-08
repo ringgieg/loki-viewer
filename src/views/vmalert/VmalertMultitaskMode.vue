@@ -14,12 +14,16 @@ import { onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useVmalertStore } from '../../stores/vmalertStore'
 import { useServiceStore } from '../../stores/serviceStore'
+import { useVmalertPollingQuery } from './useVmalertPollingQuery'
 import VmalertTaskList from './components/VmalertTaskList.vue'
 import VmalertMonitor from './components/VmalertMonitor.vue'
 
 const route = useRoute()
 const vmalertStore = useVmalertStore()
 const serviceStore = useServiceStore()
+
+// Initialize vue-query polling driver (enabled when vmalertStore.startPolling() is called).
+useVmalertPollingQuery()
 
 // Check if kiosk mode is enabled via URL parameter
 const kioskMode = computed(() => route.query.kiosk === '1')

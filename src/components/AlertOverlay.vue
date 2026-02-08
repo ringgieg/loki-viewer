@@ -26,19 +26,30 @@
 import { watch, ref, onUnmounted } from 'vue'
 import { useAlertStore } from '../stores/alertStore'
 import { playAlertSound } from '../utils/audio'
-import { BellFilled } from '@element-plus/icons-vue'
+import { MuteNotification } from '@element-plus/icons-vue'
 
 const alertStore = useAlertStore()
 const soundIntervalId = ref(null)
 
+function safePlayAlertSound(type) {
+  try {
+    playAlertSound(type)
+  } catch (e) {
+    console.error('[AlertOverlay] playAlertSound failed:', e)
+  }
+}
+
 // 开始循环播放提示音
 function startAlertSound() {
+  // Ensure we never accumulate multiple intervals
+  stopAlertSound()
+
   // 立即播放一次
-  playAlertSound('error')
+  safePlayAlertSound('error')
 
   // 每1秒播放一次
   soundIntervalId.value = setInterval(() => {
-    playAlertSound('error')
+    safePlayAlertSound('error')
   }, 2000)
 }
 
@@ -54,9 +65,14 @@ function stopAlertSound() {
 watch(
   () => alertStore.hasAlert,
   (newValue) => {
-    if (newValue) {
-      startAlertSound()
-    } else {
+    try {
+      if (newValue) {
+        startAlertSound()
+      } else {
+        stopAlertSound()
+      }
+    } catch (e) {
+      console.error('[AlertOverlay] hasAlert watcher failed:', e)
       stopAlertSound()
     }
   },

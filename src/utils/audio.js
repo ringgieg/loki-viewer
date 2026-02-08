@@ -26,6 +26,26 @@ export function playAlertSound(type = 'error') {
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
 
     // 播放音效
+    // IMPORTANT: close AudioContext after playback to avoid leaking contexts over time.
+    // Creating many AudioContexts (e.g., when alert sound loops) can freeze/crash Chromium/Electron.
+    oscillator.onended = () => {
+      try {
+        oscillator.disconnect()
+      } catch (e) {
+        // ignore
+      }
+      try {
+        gainNode.disconnect()
+      } catch (e) {
+        // ignore
+      }
+      try {
+        audioContext.close()
+      } catch (e) {
+        // ignore
+      }
+    }
+
     if (freq.length === 1) {
       // 单音
       oscillator.frequency.setValueAtTime(freq[0], audioContext.currentTime)
