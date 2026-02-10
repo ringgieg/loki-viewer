@@ -124,13 +124,15 @@ const expandedLogs = ref(new Set())
 
 const linkify = new LinkifyIt()
 
-const rowVirtualizer = useVirtualizer(() => ({
-  count: props.logs.length,
-  getScrollElement: () => containerRef.value,
-  estimateSize: () => props.estimatedItemHeight,
-  overscan: props.bufferSize,
-  getItemKey: (index) => props.logs[index]?.id ?? index
-}))
+const rowVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: props.logs.length,
+    getScrollElement: () => containerRef.value,
+    estimateSize: () => props.estimatedItemHeight,
+    overscan: props.bufferSize,
+    getItemKey: (index) => props.logs[index]?.id ?? index
+  }))
+)
 
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 
