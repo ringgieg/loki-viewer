@@ -110,6 +110,7 @@ export function tailLogs(query, callbacks = {}) {
   let isManualClose = false
   let isConnecting = false
   let isConnected = false
+  let lastError = null
   const reconnectDelay = getCurrentServiceConfig('vmlog.tail.reconnectDelay', 3000)
 
   function cleanupTail() {
@@ -126,6 +127,8 @@ export function tailLogs(query, callbacks = {}) {
   function connect() {
     // Prevent multiple simultaneous connection attempts
     if (isManualClose || isConnecting) return
+
+    lastError = null
 
     // Cleanup any existing connection first
     cleanupTail()
@@ -194,12 +197,20 @@ export function tailLogs(query, callbacks = {}) {
         if (isManualClose) return
         isConnecting = false
         isConnected = false
+        lastError = error
         if (onError) onError(error)
       }).finally(() => {
-        const event = { type: 'close', manual: isManualClose }
+        const isErrorClose = !!lastError
+        const event = { type: 'close', manual: isManualClose, error: isErrorClose }
         isConnecting = false
-        isConnected = false
-        if (onClose) onClose(event)
+
+        // For VictoriaLogs tail, the server/proxy may complete the response periodically.
+        // Treat a normal completion as "still connected" and rely on reconnect loop.
+        // Only transition to disconnected on errors or manual close.
+        if (isManualClose || isErrorClose) {
+          isConnected = false
+          if (onClose) onClose(event)
+        }
 
         if (!isManualClose) {
           reconnectAttempts++

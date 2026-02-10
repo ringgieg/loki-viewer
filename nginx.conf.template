@@ -28,11 +28,10 @@ server {
 
     # VictoriaLogs (vmlog) reverse proxy configuration
     # VMLOG_URL can be customized via environment variable (default: http://vmlog:9428)
-    location /select/ {
-        # Use environment variable or default value
-        # In docker-compose, set VMLOG_URL environment variable
-        # Example: VMLOG_URL=http://your-vmlog-server:9428
-        proxy_pass ${VMLOG_URL}/;
+    # Tail endpoint is HTTP streaming; disable proxy buffering there to avoid delayed updates.
+    location ^~ /select/logsql/tail {
+        # Preserve full path including /select prefix
+        proxy_pass ${VMLOG_URL};
 
         # Proxy headers
         proxy_set_header Host $host;
@@ -40,7 +39,42 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # LogsQL tail uses HTTP streaming (no WebSocket required)
+        # Streaming: do not buffer, do not compress
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_set_header Connection "";
+
+        # Long-lived stream timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 1h;
+        proxy_read_timeout 1h;
+
+        # CORS headers (if needed)
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+
+        if ($request_method = 'OPTIONS') {
+            return 204;
+        }
+    }
+
+    location /select/ {
+        # Use environment variable or default value
+        # In docker-compose, set VMLOG_URL environment variable
+        # Example: VMLOG_URL=http://your-vmlog-server:9428
+        # Preserve full path including /select prefix
+        proxy_pass ${VMLOG_URL};
+
+        # Proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # LogsQL tail uses HTTP streaming; keep normal buffering for query endpoints
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
