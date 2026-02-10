@@ -22,6 +22,14 @@
           <el-option label="INFO" value="INFO" />
           <el-option label="DEBUG" value="DEBUG" />
         </el-select>
+
+        <el-button
+          size="small"
+          :disabled="logs.length === 0"
+          @click="scrollToTop"
+        >
+          顶部
+        </el-button>
       </div>
     </div>
 
@@ -35,6 +43,7 @@
 
         <VirtualLogList
           v-else-if="logs.length > 0"
+          ref="virtualLogListRef"
           :logs="logs"
           :loading="loading"
           :has-more="hasMore"
@@ -76,6 +85,7 @@ const initialLoading = ref(false)
 const hasMore = ref(true)
 const nextCursor = ref(null)
 const selectedLevel = ref(getCurrentServiceConfig('defaultLogLevel', ''))
+const virtualLogListRef = ref(null)
 
 // Get config values
 const logsPerPage = getCurrentServiceConfig('logsPerPage', 500)
@@ -88,6 +98,10 @@ const maxLogsInMemory = (() => {
 
 let unsubscribe = null
 const highlightTimeouts = new Map()
+
+function scrollToTop() {
+  virtualLogListRef.value?.scrollToTop?.()
+}
 
 function clearHighlightTimeouts() {
   for (const timeoutId of highlightTimeouts.values()) {

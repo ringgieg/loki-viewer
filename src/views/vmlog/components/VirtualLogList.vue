@@ -28,7 +28,7 @@
           width: '100%',
           transform: `translateY(${item.virtualRow.start}px)`
         }"
-        @click="toggleExpand(item.log.id)"
+        @click="toggleExpand(item.log.id, $event)"
       >
         <div class="log-header">
           <div class="log-meta">
@@ -141,6 +141,16 @@ const virtualLogItems = computed(() => {
     .getVirtualItems()
     .map(virtualRow => ({ virtualRow, log: props.logs[virtualRow.index] }))
     .filter(item => item.log)
+})
+
+function scrollToTop() {
+  const el = containerRef.value
+  if (!el) return
+  el.scrollTop = 0
+}
+
+defineExpose({
+  scrollToTop
 })
 
 function setRowRef(el) {
@@ -284,7 +294,7 @@ function isExpanded(logId) {
   return expandedLogs.value.has(logId)
 }
 
-function toggleExpand(logId) {
+function toggleExpand(logId, event) {
   // Don't toggle if user is selecting text
   const selection = window.getSelection()
   if (selection && selection.toString().length > 0) {
@@ -296,10 +306,16 @@ function toggleExpand(logId) {
   } else {
     expandedLogs.value.add(logId)
   }
-  // Ensure the virtualizer re-measures after DOM updates
+  // Re-measure only the clicked row to avoid large offset jumps.
+  const targetEl = event?.currentTarget
   nextTick(() => {
     const v = rowVirtualizer.value
-    if (v && typeof v.measure === 'function') v.measure()
+    if (!v) return
+
+    if (targetEl && typeof v.measureElement === 'function') {
+      v.measureElement(targetEl)
+      return
+    }
   })
 }
 

@@ -68,6 +68,10 @@ describe('LogViewer.vue', () => {
       global: {
         plugins: [pinia, router],
         stubs: {
+          ElButton: {
+            template: '<button><slot /></button>',
+            props: ['size', 'disabled']
+          },
           ElSelect: {
             template: '<select><slot /></select>',
             props: ['modelValue', 'placeholder', 'size', 'style']
