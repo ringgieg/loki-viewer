@@ -236,8 +236,110 @@ function escapeHtmlAttr(text) {
     .replace(/>/g, '&gt;')
 }
 
+function sanitizeLogHtml(html) {
+  // Minimal HTML sanitizer (no external deps):
+  // - allow a small set of tags
+  // - strip event handlers + disallowed attributes
+  // - drop script/style/iframe/object/embed entirely
+  // This intentionally does NOT allow arbitrary JS execution.
+  const input = String(html ?? '')
+  if (!input) return ''
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html')
+  const root = doc.body?.firstElementChild
+  if (!root) return ''
+
+  const dropTags = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED'])
+  const allowedTags = new Set([
+    'A', 'BR', 'B', 'STRONG', 'I', 'EM',
+    'CODE', 'PRE',
+    'SPAN', 'DIV', 'P',
+    'UL', 'OL', 'LI'
+  ])
+
+  const allowedAttrsByTag = {
+    A: new Set(['href', 'title', 'target', 'rel', 'class'])
+  }
+  const allowedGlobalAttrs = new Set(['class'])
+
+  function isSafeHref(href) {
+    const v = String(href ?? '').trim()
+    if (!v) return false
+    const lower = v.toLowerCase()
+    if (lower.startsWith('javascript:')) return false
+    if (lower.startsWith('data:')) return false
+    return true
+  }
+
+  function unwrapElement(el) {
+    const parent = el.parentNode
+    if (!parent) return
+    while (el.firstChild) parent.insertBefore(el.firstChild, el)
+    parent.removeChild(el)
+  }
+
+  // Walk elements (static snapshot because we'll mutate)
+  const elements = Array.from(root.querySelectorAll('*'))
+  for (const el of elements) {
+    const tag = el.tagName
+
+    if (dropTags.has(tag)) {
+      el.remove()
+      continue
+    }
+
+    if (!allowedTags.has(tag)) {
+      unwrapElement(el)
+      continue
+    }
+
+    // Remove disallowed attributes + any on* handlers
+    const allowedForTag = allowedAttrsByTag[tag] || null
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name
+      const lower = name.toLowerCase()
+      if (lower.startsWith('on')) {
+        el.removeAttribute(name)
+        continue
+      }
+
+      const allowed = (allowedForTag && allowedForTag.has(lower)) || allowedGlobalAttrs.has(lower)
+      if (!allowed) {
+        el.removeAttribute(name)
+      }
+    }
+
+    if (tag === 'A') {
+      const href = el.getAttribute('href')
+      if (!isSafeHref(href)) {
+        el.removeAttribute('href')
+      }
+
+      const target = (el.getAttribute('target') || '').toLowerCase()
+      if (target === '_blank') {
+        const rel = new Set(String(el.getAttribute('rel') || '').split(/\s+/).filter(Boolean).map(s => s.toLowerCase()))
+        rel.add('noopener')
+        rel.add('noreferrer')
+        el.setAttribute('rel', Array.from(rel).join(' '))
+      }
+    }
+  }
+
+  return root.innerHTML
+}
+
 function linkifyText(text) {
   if (!text) return ''
+
+  // Opt-in: allow limited HTML in logs (sanitized).
+  // This is useful for trusted environments that intentionally embed markup.
+  // NOTE: This still blocks script execution and event handlers.
+  const allowHtml = getConfig('vmlog.allowHtmlInLogs', false)
+  if (allowHtml) {
+    return sanitizeLogHtml(text)
+  }
+
   const matches = linkify.match(text)
   if (!matches || matches.length === 0) {
     return escapeHtml(text)
