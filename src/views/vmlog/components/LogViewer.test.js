@@ -69,8 +69,9 @@ describe('LogViewer.vue', () => {
         plugins: [pinia, router],
         stubs: {
           ElButton: {
-            template: '<button><slot /></button>',
-            props: ['size', 'disabled']
+            template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+            props: ['size', 'disabled'],
+            emits: ['click']
           },
           ElSelect: {
             template: '<select><slot /></select>',
@@ -230,5 +231,44 @@ describe('LogViewer.vue', () => {
 
     // Should fetch new data with new cursor
     expect(wrapper.vm.nextCursor).toBe('67890')
+  })
+
+  it('should pause streaming on stop and resume on refresh', async () => {
+    vmlog.queryTaskLogs.mockResolvedValue({
+      logs: [],
+      nextCursor: null,
+      hasMore: false
+    })
+
+    const wsStore = useWsStore()
+    const setViewingSpy = vi.spyOn(wsStore, 'setCurrentViewingTask')
+    const subscribeSpy = vi.spyOn(wsStore, 'subscribe').mockImplementation(() => () => {})
+
+    const wrapper = await createWrapper('test-task')
+    await flushPromises()
+
+    // Initially should start streaming
+    expect(subscribeSpy).toHaveBeenCalledTimes(1)
+
+    // Click stop
+    const stopBtn = wrapper.findAll('button').find(b => b.text() === '停止')
+    expect(stopBtn).toBeTruthy()
+    await stopBtn.trigger('click')
+
+    // After stop, viewing task should be cleared
+    expect(setViewingSpy).toHaveBeenLastCalledWith(null)
+
+    // Button switches to refresh
+    const refreshBtn = wrapper.findAll('button').find(b => b.text() === '刷新')
+    expect(refreshBtn).toBeTruthy()
+
+    // Click refresh: should query again
+    const beforeCalls = vmlog.queryTaskLogs.mock.calls.length
+    await refreshBtn.trigger('click')
+    await flushPromises()
+    expect(vmlog.queryTaskLogs.mock.calls.length).toBeGreaterThan(beforeCalls)
+
+    // Streaming should resume (a new subscribe)
+    expect(subscribeSpy).toHaveBeenCalledTimes(2)
   })
 })

@@ -25,6 +25,14 @@
 
         <el-button
           size="small"
+          :disabled="initialLoading"
+          @click="handleStopOrRefresh"
+        >
+          {{ isPaused ? '刷新' : '停止' }}
+        </el-button>
+
+        <el-button
+          size="small"
           :disabled="logs.length === 0"
           @click="scrollToTop"
         >
@@ -86,6 +94,7 @@ const hasMore = ref(true)
 const nextCursor = ref(null)
 const selectedLevel = ref(getCurrentServiceConfig('defaultLogLevel', ''))
 const virtualLogListRef = ref(null)
+const isPaused = ref(false)
 
 // Get config values
 const logsPerPage = getCurrentServiceConfig('logsPerPage', 500)
@@ -98,6 +107,7 @@ const maxLogsInMemory = (() => {
 
 let unsubscribe = null
 const highlightTimeouts = new Map()
+const seenLogKeys = new Set()
 
 function scrollToTop() {
   virtualLogListRef.value?.scrollToTop?.()
@@ -110,12 +120,24 @@ function clearHighlightTimeouts() {
   highlightTimeouts.clear()
 }
 
+function getLogKey(log) {
+  const timestampNano = log?.timestampNano ?? ((log?.timestamp != null) ? Number(log.timestamp) * 1000000 : null)
+  const taskName = log?.taskName ?? log?.labels?.task_name ?? ''
+  const line = log?.line ?? ''
+  return `${timestampNano}|${taskName}|${line}`
+}
+
+function clearSeenLogKeys() {
+  seenLogKeys.clear()
+}
+
 function enforceMaxLogsInMemory() {
   if (!maxLogsInMemory || maxLogsInMemory <= 0) return
   if (logs.value.length <= maxLogsInMemory) return
 
   const removed = logs.value.splice(maxLogsInMemory)
   for (const removedLog of removed) {
+    seenLogKeys.delete(getLogKey(removedLog))
     const removedId = removedLog?.id
     if (!removedId) continue
     const timeoutId = highlightTimeouts.get(removedId)
@@ -139,17 +161,18 @@ const connectionStatusText = computed(() => {
 watch(currentTask, async (newTask, oldTask) => {
   stopStreaming()
   logs.value = []
+  clearSeenLogKeys()
   nextCursor.value = null
   hasMore.value = true
 
   // Update currently viewing task in wsStore
-  wsStore.setCurrentViewingTask(newTask)
+  wsStore.setCurrentViewingTask(isPaused.value ? null : newTask)
 
   if (newTask) {
     // Clear unread alerts when viewing this task
-    taskStore.clearUnreadAlerts(newTask)
+    if (!isPaused.value) taskStore.clearUnreadAlerts(newTask)
     await fetchInitialLogs()
-    startStreaming()
+    if (!isPaused.value) startStreaming()
   }
 }, { immediate: true })
 
@@ -158,10 +181,11 @@ watch(selectedLevel, async () => {
   if (currentTask.value) {
     stopStreaming()
     logs.value = []
+    clearSeenLogKeys()
     nextCursor.value = null
     hasMore.value = true
     await fetchInitialLogs()
-    startStreaming()
+    if (!isPaused.value) startStreaming()
   }
 })
 
@@ -171,6 +195,7 @@ async function fetchInitialLogs() {
   console.log('[LogViewer] Fetching initial logs for task:', currentTask.value)
   initialLoading.value = true
   logs.value = []
+  clearSeenLogKeys()
   nextCursor.value = null
   hasMore.value = true
 
@@ -182,6 +207,9 @@ async function fetchInitialLogs() {
     const result = await queryTaskLogs(currentTask.value, options)
     console.log('[LogViewer] Got logs:', result.logs.length)
     logs.value = result.logs
+    for (const log of logs.value) {
+      seenLogKeys.add(getLogKey(log))
+    }
     enforceMaxLogsInMemory()
     nextCursor.value = result.nextCursor
     hasMore.value = result.hasMore
@@ -217,7 +245,7 @@ async function loadMoreLogs() {
 }
 
 function startStreaming() {
-  if (!currentTask.value || unsubscribe) return
+  if (!currentTask.value || unsubscribe || isPaused.value) return
 
   // Subscribe to logs for this specific task
   unsubscribe = wsStore.subscribe(currentTask.value, (newLogs) => {
@@ -226,7 +254,17 @@ function startStreaming() {
 
     if (filteredLogs.length === 0) return
 
-    const markedLogs = filteredLogs.map(log => ({ ...log, isNew: true }))
+    const dedupedLogs = []
+    for (const log of filteredLogs) {
+      const key = getLogKey(log)
+      if (seenLogKeys.has(key)) continue
+      seenLogKeys.add(key)
+      dedupedLogs.push(log)
+    }
+
+    if (dedupedLogs.length === 0) return
+
+    const markedLogs = dedupedLogs.map(log => ({ ...log, isNew: true }))
     // Insert in-place to avoid allocating a new array on every update
     // (helps performance when logs stream frequently)
     logs.value.unshift(...markedLogs)
@@ -261,6 +299,31 @@ function stopStreaming() {
   }
 
   clearHighlightTimeouts()
+}
+
+async function handleStopOrRefresh() {
+  if (!currentTask.value) return
+  if (initialLoading.value) return
+
+  if (!isPaused.value) {
+    isPaused.value = true
+    stopStreaming()
+    // When paused, treat as not actively viewing so unread counters keep working.
+    wsStore.setCurrentViewingTask(null)
+    return
+  }
+
+  // Refresh = query again then resume streaming
+  isPaused.value = false
+  wsStore.setCurrentViewingTask(currentTask.value)
+  taskStore.clearUnreadAlerts(currentTask.value)
+  stopStreaming()
+  logs.value = []
+  clearSeenLogKeys()
+  nextCursor.value = null
+  hasMore.value = true
+  await fetchInitialLogs()
+  startStreaming()
 }
 
 onUnmounted(() => {
