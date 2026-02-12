@@ -477,14 +477,14 @@ describe('wsStore', () => {
       wsStore.connect()
 
       // First close without ever being connected - should NOT trigger alert
-      wsStore._testCallbacks.onClose()
+      wsStore._testCallbacks.onClose({ error: true })
       expect(triggerAlertSpy).not.toHaveBeenCalledWith('disconnect')
 
       // Open connection
       wsStore._testCallbacks.onOpen()
 
       // Now close after being connected - should trigger alert
-      wsStore._testCallbacks.onClose()
+      wsStore._testCallbacks.onClose({ error: true })
       expect(triggerAlertSpy).toHaveBeenCalledWith('disconnect')
     })
   })

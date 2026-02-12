@@ -11,6 +11,9 @@ const routes = [
     path: '/',
     redirect: () => {
       const serviceId = getCurrentServiceId()
+      if (!serviceId) {
+        return `${logsBasePath}`
+      }
       const serviceType = getServiceType(serviceId)
 
       if (serviceType === 'vmalert-multitask') {
@@ -22,7 +25,7 @@ const routes = [
   },
   // vmlog routes
   {
-    path: `${logsBasePath}/:serviceId`,
+    path: `${logsBasePath}/:serviceId?`,
     name: 'service-logs',
     component: VmlogMultitaskMode,
     props: true
@@ -35,7 +38,7 @@ const routes = [
   },
   // vmalert routes
   {
-    path: `${vmalertBasePath}/:serviceId`,
+    path: `${vmalertBasePath}/:serviceId?`,
     name: 'service-vmalert',
     component: VmalertMultitaskMode,
     props: true

@@ -55,11 +55,24 @@ window.APP_CONFIG = {
           retryBaseDelay: 1000
         },
 
-        // 查询标签（必需?
-        fixedLabels: {                            // 必需：固定查询标?
+        // 查询标签（必需）
+        // fixedLabels 支持两种格式：
+        // 1) 兼容旧格式：对象 map（等价于每个 key 做 = 匹配）
+        // 2) 规则数组：[{ key, in, notIn, inRegex, notRegex }]，用于“查询级别抑制/过滤”（不做 message 内容过滤）
+        //    - in / notIn: 数组（1 个值生成 =/!=；多个值生成正则 =~/!~）
+        //    - inRegex / notRegex: 字符串正则（注意 JS 字符串里反斜杠要写成 \\）
+        fixedLabels: {
           job: 'tasks',
           service: 'Batch-Sync'
         },
+        // fixedLabels: [
+        //   { key: 'job', in: ['tasks'] },
+        //   { key: 'service', in: ['Batch-Sync'] },
+        //   // 示例：排除某些 host
+        //   // { key: 'host', notIn: ['dev-host', 'test-host'] },
+        //   // 示例：排除压缩文件
+        //   // { key: 'filename', notRegex: '.*\\.gz$' }
+        // ],
         taskLabel: 'task_name',                    // 可选，默认值：'task_name'（任务标签字段名?
         
       },

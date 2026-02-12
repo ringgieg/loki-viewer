@@ -47,7 +47,7 @@ function startAlertSound() {
   // 立即播放一次
   safePlayAlertSound('error')
 
-  // 每1秒播放一次
+  // 每2秒播放一次
   soundIntervalId.value = setInterval(() => {
     safePlayAlertSound('error')
   }, 2000)

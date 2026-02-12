@@ -107,6 +107,7 @@ import { ArrowDown, ArrowRight, DocumentCopy, Loading } from '@element-plus/icon
 import dayjs from 'dayjs'
 import LinkifyIt from 'linkify-it'
 import { getConfig } from '../../../utils/config'
+import { copyWithClipboardJs } from '../../../utils/clipboard'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 
 const props = defineProps({
@@ -322,7 +323,8 @@ function toggleExpand(logId, event) {
 async function copyLabel(key, value) {
   const text = `${key}="${value}"`
   try {
-    await navigator.clipboard.writeText(text)
+    const ok = await copyWithClipboardJs(text)
+    if (!ok) throw new Error('clipboard.js copy failed')
     ElMessage.success({
       message: '已复制到剪贴板',
       duration: 2000,
@@ -336,7 +338,8 @@ async function copyLabel(key, value) {
 
 async function copyRawLog(text) {
   try {
-    await navigator.clipboard.writeText(text)
+    const ok = await copyWithClipboardJs(text)
+    if (!ok) throw new Error('clipboard.js copy failed')
     ElMessage.success({
       message: '已复制原始日志',
       duration: 2000,

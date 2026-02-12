@@ -57,7 +57,8 @@ export async function queryLogsWithCursor(query, options = {}) {
   const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0
 
   // Get configured time range (default: 7 days)
-  const timeRangeDays = getCurrentServiceConfig('query.defaultTimeRangeDays') ||
+  // Preserve explicit 0 (do not treat it as falsy).
+  const timeRangeDays = getCurrentServiceConfig('query.defaultTimeRangeDays', null) ??
                         getConfig('query.defaultTimeRangeDays', 7)
 
   try {
@@ -201,16 +202,19 @@ export function tailLogs(query, callbacks = {}) {
         if (onError) onError(error)
       }).finally(() => {
         const isErrorClose = !!lastError
-        const event = { type: 'close', manual: isManualClose, error: isErrorClose }
+        const event = {
+          type: 'close',
+          manual: isManualClose,
+          error: isErrorClose,
+          completed: !isManualClose && !isErrorClose
+        }
         isConnecting = false
 
         // For VictoriaLogs tail, the server/proxy may complete the response periodically.
-        // Treat a normal completion as "still connected" and rely on reconnect loop.
-        // Only transition to disconnected on errors or manual close.
-        if (isManualClose || isErrorClose) {
-          isConnected = false
-          if (onClose) onClose(event)
-        }
+        // Always treat stream completion as a close so the UI/alerting logic can reflect
+        // the actual connection state while we are reconnecting.
+        isConnected = false
+        if (onClose) onClose(event)
 
         if (!isManualClose) {
           reconnectAttempts++
@@ -254,6 +258,110 @@ function parseStreamLabels(stream) {
   return labels
 }
 
+function escapeLabelValue(value) {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+}
+
+function escapeRegexLiteral(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function normalizeFixedLabelRules(fixedLabels) {
+  if (!fixedLabels) return []
+
+  // New format: array of rules: [{key, in, notIn, inRegex, notRegex}]
+  if (Array.isArray(fixedLabels)) {
+    return fixedLabels
+      .filter(r => r && typeof r === 'object')
+      .map(r => ({ ...r, key: r.key != null ? String(r.key).trim() : '' }))
+      .filter(r => r.key)
+  }
+
+  // Backward compatible: object map
+  if (typeof fixedLabels === 'object') {
+    const rules = []
+    for (const [key, value] of Object.entries(fixedLabels)) {
+      if (value == null) continue
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        rules.push({ key: String(key).trim(), ...value })
+      } else {
+        rules.push({ key: String(key).trim(), in: [value] })
+      }
+    }
+    return rules.filter(r => r.key)
+  }
+
+  return []
+}
+
+function getFixedLabelKeys(fixedLabels) {
+  const rules = normalizeFixedLabelRules(fixedLabels)
+  return rules.map(r => r.key).filter(Boolean)
+}
+
+function fixedLabelRuleToMatcher(rule) {
+  const key = String(rule?.key || '').trim()
+  if (!key) return null
+
+  const normalizeStringList = (list) => {
+    if (!Array.isArray(list)) return []
+    return list
+      .map(v => String(v).trim())
+      .filter(v => v.length > 0)
+  }
+
+  // Priority: notIn, in, notRegex, inRegex
+  // (notRegex before inRegex so a rule can't accidentally be broadened if multiple fields are set)
+  if (Array.isArray(rule.notIn)) {
+    const values = normalizeStringList(rule.notIn)
+    if (values.length === 1) {
+      return `${key}!="${escapeLabelValue(values[0])}"`
+    }
+    if (values.length > 1) {
+      const re = `^(?:${values.map(escapeRegexLiteral).join('|')})$`
+      return `${key}!~"${re}"`
+    }
+  }
+
+  if (Array.isArray(rule.in)) {
+    const values = normalizeStringList(rule.in)
+    if (values.length === 1) {
+      return `${key}="${escapeLabelValue(values[0])}"`
+    }
+    if (values.length > 1) {
+      const re = `^(?:${values.map(escapeRegexLiteral).join('|')})$`
+      return `${key}=~"${re}"`
+    }
+  }
+
+  if (typeof rule.notRegex === 'string' && rule.notRegex.trim()) {
+    // Escape as a quoted selector string (backslashes must survive JS + query parsing).
+    return `${key}!~"${escapeLabelValue(rule.notRegex.trim())}"`
+  }
+
+  if (typeof rule.inRegex === 'string' && rule.inRegex.trim()) {
+    return `${key}=~"${escapeLabelValue(rule.inRegex.trim())}"`
+  }
+
+  return null
+}
+
+// Test-only exports (kept small and explicit)
+export const __test__ = {
+  escapeLabelValue,
+  escapeRegexLiteral,
+  normalizeFixedLabelRules,
+  getFixedLabelKeys,
+  fixedLabelRuleToMatcher,
+  normalizeLogSqlRow,
+  buildTaskMessageFallbackQuery
+}
+
 function normalizeLogSqlRow(row) {
   // Get configured task label name from current service
   const taskLabel = getCurrentServiceConfig('vmlog.taskLabel', 'task_name')
@@ -271,7 +379,7 @@ function normalizeLogSqlRow(row) {
 
   // Preserve known labels from top-level fields if present.
   // VictoriaLogs may expose some labels both in _stream and as separate fields.
-  for (const key of Object.keys(fixedLabels || {})) {
+  for (const key of getFixedLabelKeys(fixedLabels)) {
     if (row && row[key] != null) labels[key] = String(row[key])
   }
   if (row && row[taskLabel] != null) labels[taskLabel] = String(row[taskLabel])
@@ -310,7 +418,7 @@ function parseLogSqlResponse(text) {
 
 export async function getLabelValues(labelName) {
   try {
-    const timeRangeDays = getCurrentServiceConfig('query.defaultTimeRangeDays') ||
+    const timeRangeDays = getCurrentServiceConfig('query.defaultTimeRangeDays', null) ??
                           getConfig('query.defaultTimeRangeDays', 7)
 
     // Treat label values as VictoriaLogs stream field values.
@@ -355,27 +463,33 @@ export function buildTaskQuery(taskName, options = {}) {
   const fixedLabels = getCurrentServiceConfig('vmlog.fixedLabels', { job: 'tasks', service: 'Batch-Sync' })
   const taskLabel = getCurrentServiceConfig('vmlog.taskLabel', 'task_name')
 
-  // Build label selectors
-  const labels = []
+  const rules = normalizeFixedLabelRules(fixedLabels)
 
-  // Add fixed labels
-  for (const [key, value] of Object.entries(fixedLabels)) {
-    labels.push(`${key}="${value}"`)
+  // Build label selectors
+  const matchers = []
+
+  // Add fixed label rules, but avoid duplicating taskLabel if taskName is provided.
+  for (const rule of rules) {
+    if (!rule || typeof rule !== 'object') continue
+    const key = String(rule.key || '').trim()
+    if (!key) continue
+    if (taskName && key === taskLabel) continue
+
+    const matcher = fixedLabelRuleToMatcher(rule)
+    if (matcher) matchers.push(matcher)
   }
 
   // Add task name filter if specified
   if (taskName) {
-    labels.push(`${taskLabel}="${taskName}"`)
+    matchers.push(`${taskLabel}="${escapeLabelValue(taskName)}"`)
   }
 
-  let query = `{${labels.join(', ')}}`
-
-  return query
+  return `{${matchers.join(', ')}}`
 }
 
 function buildTaskMessageFallbackQuery(taskName) {
   const baseSelector = buildTaskQuery(null)
-  const safeTask = String(taskName || '').replace(/"/g, '\\"')
+  const safeTask = escapeLabelValue(String(taskName || ''))
   if (!safeTask) return baseSelector
   return `${baseSelector} _msg:"${safeTask}"`
 }
